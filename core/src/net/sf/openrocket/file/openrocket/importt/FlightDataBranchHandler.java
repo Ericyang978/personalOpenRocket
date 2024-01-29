@@ -2,12 +2,16 @@ package net.sf.openrocket.file.openrocket.importt;
 
 import java.util.HashMap;
 
+import net.sf.openrocket.logging.SimulationAbort;
+import net.sf.openrocket.logging.SimulationAbort.Cause;
 import net.sf.openrocket.logging.WarningSet;
 import net.sf.openrocket.file.DocumentLoadingContext;
 import net.sf.openrocket.file.simplesax.AbstractElementHandler;
 import net.sf.openrocket.file.simplesax.ElementHandler;
 import net.sf.openrocket.file.simplesax.PlainTextHandler;
 import net.sf.openrocket.l10n.Translator;
+import net.sf.openrocket.rocketcomponent.Rocket;
+import net.sf.openrocket.rocketcomponent.RocketComponent;
 import net.sf.openrocket.simulation.FlightDataBranch;
 import net.sf.openrocket.simulation.FlightDataType;
 import net.sf.openrocket.simulation.FlightEvent;
@@ -126,6 +130,10 @@ class FlightDataBranchHandler extends AbstractElementHandler {
 		if (element.equals("event")) {
 			double time;
 			FlightEvent.Type type;
+			SimulationAbort abort = null;
+			SimulationAbort.Cause cause = null;
+			RocketComponent source = null;
+			String sourceID;
 			
 			try {
 				time = DocumentConfig.stringToDouble(attributes.get("time"));
@@ -139,8 +147,21 @@ class FlightDataBranchHandler extends AbstractElementHandler {
 				warnings.add("Illegal event specification, ignoring.");
 				return;
 			}
+
+			// Get the event source
+			Rocket rocket = context.getOpenRocketDocument().getRocket();
+			sourceID = attributes.get("source");
+			if (sourceID != null) {
+				source = rocket.findComponent(sourceID);
+			}
+
+			// For aborts, get the cause
+			cause = (Cause) DocumentConfig.findEnum(attributes.get("cause"), SimulationAbort.Cause.class);
+			if (cause != null) {
+				abort = new SimulationAbort(cause);
+			}
 			
-			branch.addEvent(new FlightEvent(type, time));
+			branch.addEvent(new FlightEvent(type, time, source, abort));
 			return;
 		}
 		

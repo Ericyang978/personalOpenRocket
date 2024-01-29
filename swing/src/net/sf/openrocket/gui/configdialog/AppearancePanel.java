@@ -2,10 +2,10 @@ package net.sf.openrocket.gui.configdialog;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Desktop;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.EventObject;
 import java.util.List;
 
@@ -59,11 +59,13 @@ import net.sf.openrocket.startup.Application;
 import net.sf.openrocket.unit.GeneralUnit;
 import net.sf.openrocket.unit.Unit;
 import net.sf.openrocket.unit.UnitGroup;
+import net.sf.openrocket.util.Invalidatable;
 import net.sf.openrocket.util.LineStyle;
+import net.sf.openrocket.util.ORColor;
 import net.sf.openrocket.util.StateChangeListener;
 import net.sf.openrocket.gui.widgets.SelectColorButton;
 
-public class AppearancePanel extends JPanel {
+public class AppearancePanel extends JPanel implements Invalidatable, InvalidatingWidget {
 	private static final long serialVersionUID = 2709187552673202019L;
 
 	private static final Translator trans = Application.getTranslator();
@@ -89,6 +91,7 @@ public class AppearancePanel extends JPanel {
 
 	private JCheckBox customInside = null;
 
+	private final List<Invalidatable> invalidatables = new ArrayList<>();
 	private final List<Component> order;	// Component traversal order
 
 	/**
@@ -139,7 +142,7 @@ public class AppearancePanel extends JPanel {
 		private void changeComponentColor(Color color) {
 			try {
 				final Method setMethod = o.getClass().getMethod(
-						"set" + valueName, net.sf.openrocket.util.Color.class);
+						"set" + valueName, ORColor.class);
 				if (color == null)
 					return;
 				try {
@@ -165,11 +168,12 @@ public class AppearancePanel extends JPanel {
 			try {
 				final Method getMethod = o.getClass().getMethod(
 						"get" + valueName);
-				net.sf.openrocket.util.Color c = (net.sf.openrocket.util.Color) getMethod
+				ORColor c = (ORColor) getMethod
 						.invoke(o);
 
 				Color awtColor = ColorConversion.toAwtColor(c);
 				colorChooser.setColor(awtColor);
+				colorChooser.updateUI();		// Needed for darklaf color chooser to update
 
 				// Bind a change of color selection to a change in the components color
 				ColorSelectionModel model = colorChooser.getSelectionModel();
@@ -183,7 +187,8 @@ public class AppearancePanel extends JPanel {
 
 				JDialog d = JColorChooser.createDialog(AppearancePanel.this,
 						trans.get("RocketCompCfg.lbl.Choosecolor"), true,
-						colorChooser, new ActionListener() {
+						colorChooser,
+						new ActionListener() {
 							@Override
 							public void actionPerformed(ActionEvent okEvent) {
 								changeComponentColor(colorChooser.getColor());
@@ -260,10 +265,9 @@ public class AppearancePanel extends JPanel {
 			}
 		}
 
-		net.sf.openrocket.util.Color figureColor = c.getColor();
+		ORColor figureColor = c.getColor();
 		if (figureColor == null) {
-			figureColor = Application.getPreferences().getDefaultColor(
-					c.getClass());
+			figureColor = ((SwingPreferences) Application.getPreferences()).getDefaultColor(c.getClass());
 		}
 		final JButton figureColorButton = new SelectColorButton(
 				new ColorIcon(figureColor));
@@ -276,10 +280,9 @@ public class AppearancePanel extends JPanel {
 		c.addChangeListener(new StateChangeListener() {
 			@Override
 			public void stateChanged(EventObject e) {
-				net.sf.openrocket.util.Color col = c.getColor();
+				ORColor col = c.getColor();
 				if (col == null) {
-					col = Application.getPreferences().getDefaultColor(
-							c.getClass());
+					col = ((SwingPreferences) Application.getPreferences()).getDefaultColor(c.getClass());
 				}
 				figureColorButton.setIcon(new ColorIcon(col));
 			}
@@ -289,6 +292,7 @@ public class AppearancePanel extends JPanel {
 				.addActionListener(new ColorActionListener(c, "Color"));
 
 		BooleanModel fDefault = new BooleanModel(c.getColor() == null);
+		register(fDefault);
 
 		final JButton saveAsDefault;
 		{// Style Header Row
@@ -336,7 +340,7 @@ public class AppearancePanel extends JPanel {
 			add(saveAsDefault, "span 2, align right, wrap");
 		}
 
-		{// Figure Color
+		{// Figure ORColor
 			add(new JLabel(trans.get("RocketCompCfg.lbl.Componentcolor")));
 			fDefault.addEnableComponent(figureColorButton, false);
 			add(figureColorButton);
@@ -386,6 +390,7 @@ public class AppearancePanel extends JPanel {
 
 			// Checkbox for using separate outside/inside appearance
 			BooleanModel b_customInside = new BooleanModel(handler.isSeparateInsideOutside());
+			register(b_customInside);
 			this.customInside = new JCheckBox(b_customInside);
 			customInside.setText(trans.get(tr_insideOutside));
 			customInside.setToolTipText(trans.get(tr_insideOutside_ttip));
@@ -494,6 +499,9 @@ public class AppearancePanel extends JPanel {
 								   boolean insideBuilder, JPanel panel) {
 		AppearanceBuilder builder;
 		BooleanModel mDefault;
+		DoubleModel m;
+		EnumModel<EdgeMode> em;
+
 		if (!insideBuilder) {
 			builder = ab;
 			mDefault = new BooleanModel(c.getAppearance() == null || defaultAppearance.equals(c.getAppearance()));
@@ -502,9 +510,11 @@ public class AppearancePanel extends JPanel {
 			Appearance appearance = ((InsideColorComponent) c).getInsideColorComponentHandler().getInsideAppearance();
 			mDefault = new BooleanModel(appearance == null || defaultAppearance.equals(appearance));
 		} else return;
+		register(mDefault);
 
 		DecalModel decalModel = new DecalModel(panel, document, builder);
 		JComboBox<DecalImage> textureDropDown = new JComboBox<DecalImage>(decalModel);
+		textureDropDown.setMaximumRowCount(20);
 
 		// We need to add this action listener that triggers a decalModel update when the same item is selected, because
 		// for multi-comp edits, the listeners' decals may not be updated otherwise
@@ -618,7 +628,7 @@ public class AppearancePanel extends JPanel {
 		}
 
 		// TODO: move the separate columns in two separate panels instead of adding them in a zig-zag way
-		// Color
+		// ORColor
 		panel.add(new JLabel(trans.get("AppearanceCfg.lbl.color.Color")));
 		mDefault.addEnableComponent(colorButton, false);
 		panel.add(colorButton);
@@ -628,16 +638,18 @@ public class AppearancePanel extends JPanel {
 		panel.add(new JLabel(trans.get("AppearanceCfg.lbl.texture.scale")), "gapleft para");
 
 		panel.add(new JLabel("x:"), "split 4");
-		JSpinner scaleU = new JSpinner(new DoubleModel(builder, "ScaleX",
-				TEXTURE_UNIT).getSpinnerModel());
+		m = new DoubleModel(builder, "ScaleX", TEXTURE_UNIT);
+		register(m);
+		JSpinner scaleU = new JSpinner(m.getSpinnerModel());
 		scaleU.setEditor(new SpinnerEditor(scaleU));
 		mDefault.addEnableComponent(scaleU, false);
 		panel.add(scaleU, "w 50lp");
 		order.add(((SpinnerEditor) scaleU.getEditor()).getTextField());
 
 		panel.add(new JLabel("y:"));
-		JSpinner scaleV = new JSpinner(new DoubleModel(builder, "ScaleY",
-				TEXTURE_UNIT).getSpinnerModel());
+		m = new DoubleModel(builder, "ScaleY", TEXTURE_UNIT);
+		register(m);
+		JSpinner scaleV = new JSpinner(m.getSpinnerModel());
 		scaleV.setEditor(new SpinnerEditor(scaleV));
 		mDefault.addEnableComponent(scaleV, false);
 		panel.add(scaleV, "wrap, w 50lp");
@@ -645,8 +657,8 @@ public class AppearancePanel extends JPanel {
 
 		// Shine
 		panel.add(new JLabel(trans.get("AppearanceCfg.lbl.shine")));
-		DoubleModel shineModel = new DoubleModel(builder, "Shine",
-				UnitGroup.UNITS_RELATIVE, 0, 1);
+		DoubleModel shineModel = new DoubleModel(builder, "Shine", UnitGroup.UNITS_RELATIVE, 0, 1);
+		register(shineModel);
 		// Set the initial value to the reset state, not the shine value of the default appearance of this component
 		if (mDefault.getValue() && previousUserSelectedAppearance != null)
 			shineModel.setValue(previousUserSelectedAppearance.getShine());
@@ -668,16 +680,18 @@ public class AppearancePanel extends JPanel {
 		panel.add(new JLabel(trans.get("AppearanceCfg.lbl.texture.offset")), "gapleft para");
 
 		panel.add(new JLabel("x:"), "split 4");
-		JSpinner offsetU = new JSpinner(new DoubleModel(builder, "OffsetU",
-				TEXTURE_UNIT).getSpinnerModel());
+		m = new DoubleModel(builder, "OffsetU", TEXTURE_UNIT);
+		register(m);
+		JSpinner offsetU = new JSpinner(m.getSpinnerModel());
 		offsetU.setEditor(new SpinnerEditor(offsetU));
 		mDefault.addEnableComponent(offsetU, false);
 		panel.add(offsetU, "w 50lp");
 		order.add(((SpinnerEditor) offsetU.getEditor()).getTextField());
 
 		panel.add(new JLabel("y:"));
-		JSpinner offsetV = new JSpinner(new DoubleModel(builder, "OffsetV",
-				TEXTURE_UNIT).getSpinnerModel());
+		m = new DoubleModel(builder, "OffsetV", TEXTURE_UNIT);
+		register(m);
+		JSpinner offsetV = new JSpinner(m.getSpinnerModel());
 		offsetV.setEditor(new SpinnerEditor(offsetV));
 		mDefault.addEnableComponent(offsetV, false);
 		panel.add(offsetV, "wrap, w 50lp");
@@ -687,6 +701,7 @@ public class AppearancePanel extends JPanel {
 		panel.add(new JLabel(trans.get("AppearanceCfg.lbl.opacity")));
 		DoubleModel opacityModel = new DoubleModel(builder, "Opacity",
 				UnitGroup.UNITS_RELATIVE, 0, 1);
+		register(opacityModel);
 		JSpinner spinOpacity = new JSpinner(opacityModel.getSpinnerModel());
 		spinOpacity.setEditor(new SpinnerEditor(spinOpacity));
 		BasicSlider slideOpacity = new BasicSlider(opacityModel.getSliderModel(0, 1));
@@ -704,8 +719,8 @@ public class AppearancePanel extends JPanel {
 
 		// Rotation
 		panel.add(new JLabel(trans.get("AppearanceCfg.lbl.texture.rotation")), "gapleft para");
-		DoubleModel rotationModel = new DoubleModel(builder, "Rotation",
-				UnitGroup.UNITS_ANGLE);
+		DoubleModel rotationModel = new DoubleModel(builder, "Rotation", UnitGroup.UNITS_ANGLE);
+		register(rotationModel);
 		JSpinner rotation = new JSpinner(rotationModel.getSpinnerModel());
 		rotation.setEditor(new SpinnerEditor(rotation));
 		mDefault.addEnableComponent(rotation, false);
@@ -722,8 +737,9 @@ public class AppearancePanel extends JPanel {
 		EdgeMode[] list = new EdgeMode[EdgeMode.values().length];
 		System.arraycopy(EdgeMode.values(), 0, list, 0,
 				EdgeMode.values().length);
-		JComboBox<EdgeMode> combo = new JComboBox<EdgeMode>(new EnumModel<EdgeMode>(builder,
-				"EdgeMode", list));
+		em = new EnumModel<>(builder, "EdgeMode", list);
+		register(em);
+		JComboBox<EdgeMode> combo = new JComboBox<>(em);
 		mDefault.addEnableComponent(combo, false);
 		panel.add(combo, "wrap");
 		order.add(combo);
@@ -758,5 +774,18 @@ public class AppearancePanel extends JPanel {
 				decalModel.refresh();
 			}
 		});
+	}
+
+	@Override
+	public void register(Invalidatable model) {
+		this.invalidatables.add(model);
+	}
+
+	@Override
+	public void invalidateMe() {
+		super.invalidate();
+		for (Invalidatable i : invalidatables) {
+			i.invalidateMe();
+		}
 	}
 }

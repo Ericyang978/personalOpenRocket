@@ -170,14 +170,14 @@ public class AxialStage extends ComponentAssembly implements FlightConfigurableC
 	 * @return	the previous stage in the rocket
 	 */
 	public AxialStage getUpperStage() {
-		if( null == this.parent ) {
+		if (this.parent == null) {
 			return null; 
-		}else if(Rocket.class.isAssignableFrom(this.parent.getClass()) ){
-			final int thisIndex = getStageNumber();
-			if( 0 < thisIndex ){
-				return (AxialStage)parent.getChild(thisIndex-1);
+		} else if (Rocket.class.isAssignableFrom(this.parent.getClass())) {
+			final int thisIndex = parent.getChildPosition(this);
+			if (thisIndex > 0) {
+				return (AxialStage) parent.getChild(thisIndex-1);
 			}
-		}else {
+		} else {
 			return this.parent.getStage();
 		}
 		return null;
@@ -207,10 +207,10 @@ public class AxialStage extends ComponentAssembly implements FlightConfigurableC
 	public StageSeparationConfiguration getSeparationConfiguration() {
 		FlightConfiguration flConfig = getRocket().getSelectedConfiguration();
 		StageSeparationConfiguration sepConfig = getSeparationConfigurations().get(flConfig.getId());
-		// to ensure the configuration is distinct, and we're not modifying the default
+		// To ensure the configuration is distinct, and we're not modifying the default
 		if ((sepConfig == getSeparationConfigurations().getDefault())
 				&& (flConfig.getId() != FlightConfigurationId.DEFAULT_VALUE_FCID)) {
-			sepConfig = new StageSeparationConfiguration();
+			sepConfig = sepConfig.copy(flConfig.getId());
 			getSeparationConfigurations().set(flConfig.getId(), sepConfig);
 		}
 		return sepConfig;
@@ -242,7 +242,9 @@ public class AxialStage extends ComponentAssembly implements FlightConfigurableC
 	public void clearConfigListeners() {
 		super.clearConfigListeners();
 		// StageSeparationConfiguration also has config listeners, so clear them as well
-		StageSeparationConfiguration thisConfig = getSeparationConfiguration();
-		thisConfig.clearConfigListeners();
+		if (getRoot() instanceof Rocket) {		// Root can be different from the rocket if this stage (or its parent) has been removed from the rocket
+			StageSeparationConfiguration thisConfig = getSeparationConfiguration();
+			thisConfig.clearConfigListeners();
+		}
 	}
 }

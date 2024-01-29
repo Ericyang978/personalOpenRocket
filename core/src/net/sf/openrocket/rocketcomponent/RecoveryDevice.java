@@ -44,8 +44,7 @@ public abstract class RecoveryDevice extends MassObject implements FlightConfigu
 		deploymentConfigurations.map.values().iterator().next().setDeployDelay(altitude);
 	}
 	public RecoveryDevice() {
-		this.deploymentConfigurations =
-				new FlightConfigurableParameterSet<DeploymentConfiguration>( new DeploymentConfiguration());
+		this.deploymentConfigurations = new FlightConfigurableParameterSet<>( new DeploymentConfiguration());
 		defaultMaterial = (Material.Surface) Application.getPreferences().getDefaultComponentMaterial(RecoveryDevice.class, Material.Type.SURFACE);
 		setMaterial(Application.getPreferences().getDefaultComponentMaterial(RecoveryDevice.class, Material.Type.SURFACE));
 	}
@@ -162,7 +161,7 @@ public abstract class RecoveryDevice extends MassObject implements FlightConfigu
 	@Override
 	protected RocketComponent copyWithOriginalID() {
 		RecoveryDevice copy = (RecoveryDevice) super.copyWithOriginalID();
-		copy.deploymentConfigurations = new FlightConfigurableParameterSet<DeploymentConfiguration>(deploymentConfigurations);
+		copy.deploymentConfigurations = new FlightConfigurableParameterSet<>(deploymentConfigurations);
 		return copy;
 	}
 

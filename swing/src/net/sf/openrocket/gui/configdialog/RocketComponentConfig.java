@@ -30,6 +30,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.border.Border;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -39,7 +40,6 @@ import net.sf.openrocket.document.OpenRocketDocument;
 import net.sf.openrocket.gui.SpinnerEditor;
 import net.sf.openrocket.gui.adaptors.BooleanModel;
 import net.sf.openrocket.gui.adaptors.DoubleModel;
-import net.sf.openrocket.gui.adaptors.IntegerModel;
 import net.sf.openrocket.gui.adaptors.PresetModel;
 import net.sf.openrocket.gui.adaptors.TextComponentSelectionKeyListener;
 import net.sf.openrocket.gui.components.BasicSlider;
@@ -50,6 +50,7 @@ import net.sf.openrocket.gui.components.UnitSelector;
 import net.sf.openrocket.gui.dialogs.preset.ComponentPresetChooserDialog;
 import net.sf.openrocket.gui.util.GUIUtil;
 import net.sf.openrocket.gui.util.Icons;
+import net.sf.openrocket.gui.util.UITheme;
 import net.sf.openrocket.gui.widgets.IconToggleButton;
 import net.sf.openrocket.gui.widgets.SelectColorButton;
 import net.sf.openrocket.l10n.Translator;
@@ -61,7 +62,7 @@ import net.sf.openrocket.startup.Preferences;
 import net.sf.openrocket.unit.UnitGroup;
 import net.sf.openrocket.util.Invalidatable;
 
-public class RocketComponentConfig extends JPanel {
+public class RocketComponentConfig extends JPanel implements Invalidatable, InvalidatingWidget {
 	private static final long serialVersionUID = -2925484062132243982L;
 
 	private static final Translator trans = Application.getTranslator();
@@ -70,10 +71,10 @@ public class RocketComponentConfig extends JPanel {
 	protected final OpenRocketDocument document;
 	protected final RocketComponent component;
 	protected final JTabbedPane tabbedPane;
-	protected final ComponentConfigDialog parent;
+	protected final JDialog parent;
 	protected boolean isNewComponent = false;		// Checks whether this config dialog is editing an existing component, or a new one
 	
-	private final List<Invalidatable> invalidatables = new ArrayList<Invalidatable>();
+	private final List<Invalidatable> invalidatables = new ArrayList<>();
 	protected final List<Component> order = new ArrayList<>();		// Component traversal order
 	
 	private JComboBox<?> presetComboBox;
@@ -87,7 +88,7 @@ public class RocketComponentConfig extends JPanel {
 	private DescriptionArea componentInfo;
 	private IconToggleButton infoBtn;
 
-	private JPanel buttonPanel;
+	protected JPanel buttonPanel;
 	protected JButton okButton;
 	protected JButton cancelButton;
 	private AppearancePanel appearancePanel = null;
@@ -98,16 +99,20 @@ public class RocketComponentConfig extends JPanel {
 	private boolean allSameType;		// Checks whether all listener components are of the same type as <component>
 	private boolean allMassive;			// Checks whether all listener components, and this component, are massive
 
+	private static Color darkWarningColor;
+	private static Color multiCompEditColor;
+	private static Border border;
+
+	static {
+		initColors();
+	}
+
 	public RocketComponentConfig(OpenRocketDocument document, RocketComponent component, JDialog parent) {
 		setLayout(new MigLayout("fill, gap 4!, ins panel, hidemode 3", "[]:5[]", "[growprio 5]5![fill, grow, growprio 500]5![growprio 5]"));
 
 		this.document = document;
 		this.component = component;
-		if (parent instanceof ComponentConfigDialog) {
-			this.parent = (ComponentConfigDialog) parent;
-		} else {
-			this.parent = null;
-		}
+		this.parent = parent;
 
 		// Check the listeners for the same type and massive status
 		allSameType = true;
@@ -144,6 +149,7 @@ public class RocketComponentConfig extends JPanel {
 		if (allSameType && component.getPresetType() != null) {
 			// If the component supports a preset, show the preset selection box.
 			presetModel = new PresetModel(this, document, component);
+			register(presetModel);
 			presetComboBox = new JComboBox(presetModel);
 			presetComboBox.setMaximumRowCount(25);
 			presetComboBox.setEditable(false);
@@ -179,6 +185,7 @@ public class RocketComponentConfig extends JPanel {
 		if (allMassive) {
 			//// Appearance options
 			appearancePanel = new AppearancePanel(document, component, parent, order);
+			register(appearancePanel);
 			tabbedPane.addTab(trans.get("RocketCompCfg.tab.Appearance"), null, appearancePanel,
 					trans.get("RocketCompCfg.tab.Appearance.ttip"));
 		}
@@ -192,10 +199,21 @@ public class RocketComponentConfig extends JPanel {
 		updateFields();
 	}
 
+	private static void initColors() {
+		updateColors();
+		UITheme.Theme.addUIThemeChangeListener(RocketComponentConfig::updateColors);
+	}
+
+	private static void updateColors() {
+		darkWarningColor = GUIUtil.getUITheme().getDarkWarningColor();
+		multiCompEditColor = GUIUtil.getUITheme().getMultiCompEditColor();
+		border = GUIUtil.getUITheme().getBorder();
+	}
+
 	/**
 	 * Add a section to the component configuration dialog that displays information about the component.
 	 */
-	private void addComponentInfo(JPanel buttonPanel) {
+	protected void addComponentInfo(JPanel buttonPanel) {
 		// Don't add the info panel if this is a multi-comp edit
 		List<RocketComponent> listeners = component.getConfigListeners();
 		if (listeners != null && listeners.size() > 0) {
@@ -256,7 +274,7 @@ public class RocketComponentConfig extends JPanel {
 
 		//// Multi-comp edit label
 		multiCompEditLabel = new StyledLabel(" ", -1, Style.BOLD);
-		multiCompEditLabel.setFontColor(new Color(170, 0, 100));
+		multiCompEditLabel.setFontColor(multiCompEditColor);
 		buttonPanel.add(multiCompEditLabel, "split 2");
 
 		//// Mass:
@@ -274,27 +292,34 @@ public class RocketComponentConfig extends JPanel {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				// Don't do anything on cancel if you are editing an existing component, and it is not modified
-				if (!isNewComponent && parent != null && !parent.isModified()) {
-					ComponentConfigDialog.disposeDialog();
+				if (!isNewComponent && parent != null && (parent instanceof ComponentConfigDialog && !((ComponentConfigDialog) parent).isModified())) {
+					disposeDialog();
 					return;
 				}
 				// Apply the cancel operation if set to auto discard in preferences
 				if (!preferences.isShowDiscardConfirmation()) {
 					ComponentConfigDialog.clearConfigListeners = false;		// Undo action => config listeners of new component will be cleared
-					ComponentConfigDialog.disposeDialog();
+					disposeDialog();
 					document.undo();
 					return;
 				}
 
 				// Yes/No dialog: Are you sure you want to discard your changes?
-				JPanel msg = createCancelOperationContent();
-				int resultYesNo = JOptionPane.showConfirmDialog(RocketComponentConfig.this, msg,
-						trans.get("RocketCompCfg.CancelOperation.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-				if (resultYesNo == JOptionPane.YES_OPTION) {
-					ComponentConfigDialog.clearConfigListeners = false;		// Undo action => config listeners of new component will be cleared
-					ComponentConfigDialog.disposeDialog();
-					document.undo();
-				}
+				SwingUtilities.invokeLater(() -> {
+					JPanel msg = createCancelOperationContent();
+					int resultYesNo = JOptionPane.showConfirmDialog(RocketComponentConfig.this, msg,
+							trans.get("RocketCompCfg.CancelOperation.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+
+					if (resultYesNo == JOptionPane.YES_OPTION) {
+						ComponentConfigDialog.clearConfigListeners = false;
+
+						// Need to execute after delay, otherwise the dialog will not be disposed
+						GUIUtil.executeAfterDelay(100, () -> {
+							disposeDialog();
+							document.undo();
+						});
+					}
+				});
 			}
 		});
 		buttonPanel.add(cancelButton, "split 2, right, gapleft 30lp");
@@ -305,7 +330,7 @@ public class RocketComponentConfig extends JPanel {
 		okButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
-				ComponentConfigDialog.disposeDialog();
+				disposeDialog();
 			}
 		});
 		buttonPanel.add(okButton);
@@ -315,7 +340,18 @@ public class RocketComponentConfig extends JPanel {
 		this.add(buttonPanel, "newline, spanx, growx");
 	}
 
-	private JPanel createCancelOperationContent() {
+	protected void disposeDialog() {
+		invalidate();
+		if (parent != null) {
+			if (parent instanceof ComponentConfigDialog) {
+				ComponentConfigDialog.disposeDialog();
+			} else {
+				parent.dispose();
+			}
+		}
+	}
+
+	protected JPanel createCancelOperationContent() {
 		JPanel panel = new JPanel(new MigLayout());
 		String msg = isNewComponent ? trans.get("RocketCompCfg.CancelOperation.msg.undoAdd") :
 				trans.get("RocketCompCfg.CancelOperation.msg.discardChanges");
@@ -477,6 +513,7 @@ public class RocketComponentConfig extends JPanel {
 		// OVERRIDE MASS ----------------------------------
 		JPanel checkboxes = new JPanel(new MigLayout("inset 0"));
 		bm = new BooleanModel(component, "MassOverridden");
+		register(bm);
 		check = new JCheckBox(bm);
 		//// Override mass:
 		check.setText(trans.get("RocketCompCfg.checkbox.Overridemass"));
@@ -486,6 +523,7 @@ public class RocketComponentConfig extends JPanel {
 
 		////// Override subcomponents
 		BooleanModel bmSubcomp = new BooleanModel(component, "SubcomponentsOverriddenMass");
+		register(bmSubcomp);
 		checkSub = new JCheckBox(bmSubcomp);
 		checkSub.setText(trans.get("RocketCompCfg.checkbox.OverrideSubcomponents"));
 		Font smallFont = checkSub.getFont();
@@ -501,7 +539,7 @@ public class RocketComponentConfig extends JPanel {
 			StyledLabel labelMassOverriddenBy = new StyledLabel(
 					String.format(trans.get("RocketCompCfg.lbl.MassOverriddenBy"), component.getMassOverriddenBy().getName()),
 					0, StyledLabel.Style.BOLD);
-			labelMassOverriddenBy.setFontColor(net.sf.openrocket.util.Color.DARK_RED.toAWTColor());
+			labelMassOverriddenBy.setFontColor(darkWarningColor);
 			labelMassOverriddenBy.setToolTipText(
 					String.format(trans.get("RocketCompCfg.lbl.MassOverriddenBy.ttip"), component.getMassOverriddenBy().getName()));
 			checkboxes.add(labelMassOverriddenBy, "gapleft 25lp, wrap");
@@ -510,6 +548,7 @@ public class RocketComponentConfig extends JPanel {
 		panel.add(checkboxes, "growx 1, gapright 20lp");
 		
 		DoubleModel m = new DoubleModel(component, "OverrideMass", UnitGroup.UNITS_MASS, 0);
+		register(m);
 		
 		JSpinner spin = new JSpinner(m.getSpinnerModel());
 		spin.setEditor(new SpinnerEditor(spin));
@@ -542,6 +581,7 @@ public class RocketComponentConfig extends JPanel {
 		// OVERRIDE CG ----------------------------------
 		checkboxes = new JPanel(new MigLayout("inset 0"));
 		bm = new BooleanModel(component, "CGOverridden");
+		register(bm);
 		check = new JCheckBox(bm);
 		//// Override center of gravity:"
 		check.setText(trans.get("RocketCompCfg.checkbox.Overridecenterofgrav"));
@@ -551,6 +591,7 @@ public class RocketComponentConfig extends JPanel {
 
 		////// Override subcomponents
 		bmSubcomp = new BooleanModel(component, "SubcomponentsOverriddenCG");
+		register(bmSubcomp);
 		checkSub = new JCheckBox(bmSubcomp);
 		checkSub.setText(trans.get("RocketCompCfg.checkbox.OverrideSubcomponents"));
 		checkSub.setFont(smallFont);
@@ -564,7 +605,7 @@ public class RocketComponentConfig extends JPanel {
 			StyledLabel labelCGOverriddenBy = new StyledLabel(
 					String.format(trans.get("RocketCompCfg.lbl.CGOverriddenBy"), component.getCGOverriddenBy().getName()),
 					0, StyledLabel.Style.BOLD);
-			labelCGOverriddenBy.setFontColor(net.sf.openrocket.util.Color.DARK_RED.toAWTColor());
+			labelCGOverriddenBy.setFontColor(darkWarningColor);
 			labelCGOverriddenBy.setToolTipText(
 					String.format(trans.get("RocketCompCfg.lbl.CGOverriddenBy.ttip"), component.getCGOverriddenBy().getName()));
 			checkboxes.add(labelCGOverriddenBy, "gapleft 25lp, wrap");
@@ -573,6 +614,7 @@ public class RocketComponentConfig extends JPanel {
 		panel.add(checkboxes, "growx 1, gapright 20lp");
 		
 		m = new DoubleModel(component, "OverrideCGX", UnitGroup.UNITS_LENGTH, 0);
+		register(m);
 		// Calculate suitable length for slider
 		DoubleModel length;
 		if (component.getChildCount() > 0) {
@@ -636,6 +678,7 @@ public class RocketComponentConfig extends JPanel {
     	// BEGIN OVERRIDE CD ------------------------------------------
 		checkboxes = new JPanel(new MigLayout("inset 0"));
 		bm = new BooleanModel(component, "CDOverridden");
+		register(bm);
 		check = new JCheckBox(bm);
 		//// Override coefficient of drag:
 		check.setText(trans.get("RocketCompCfg.checkbox.SetDragCoeff"));
@@ -645,6 +688,7 @@ public class RocketComponentConfig extends JPanel {
 
 		////// Override subcomponents
 		bmSubcomp = new BooleanModel(component, "SubcomponentsOverriddenCD");
+		register(bmSubcomp);
 		checkSub = new JCheckBox(bmSubcomp);
 		checkSub.setText(trans.get("RocketCompCfg.checkbox.OverrideSubcomponents"));
 		checkSub.setFont(smallFont);
@@ -658,7 +702,7 @@ public class RocketComponentConfig extends JPanel {
 			StyledLabel labelCDOverriddenBy = new StyledLabel(
 					String.format(trans.get("RocketCompCfg.lbl.CDOverriddenBy"), component.getCDOverriddenBy().getName()),
 					0, StyledLabel.Style.BOLD);
-			labelCDOverriddenBy.setFontColor(net.sf.openrocket.util.Color.DARK_RED.toAWTColor());
+			labelCDOverriddenBy.setFontColor(darkWarningColor);
 			labelCDOverriddenBy.setToolTipText(
 					String.format(trans.get("RocketCompCfg.lbl.CDOverriddenBy"), component.getCDOverriddenBy().getName()));
 			checkboxes.add(labelCDOverriddenBy, "gapleft 25lp, wrap");
@@ -667,6 +711,7 @@ public class RocketComponentConfig extends JPanel {
 		panel.add(checkboxes, "growx 1, gapright 20lp");
 		
 		m = new DoubleModel(component, "OverrideCD", UnitGroup.UNITS_COEFFICIENT, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+		register(m);
 		spin = new JSpinner(m.getSpinnerModel());
 
 		spin.setEditor(new SpinnerEditor(spin));
@@ -714,6 +759,7 @@ public class RocketComponentConfig extends JPanel {
 		commentTextArea.setLineWrap(true);
 		commentTextArea.setWrapStyleWord(true);
 		commentTextArea.setEditable(true);
+		commentTextArea.setBorder(border);
 		GUIUtil.setTabToFocusing(commentTextArea);
 		commentTextArea.addFocusListener(textFieldListener);
 		commentTextArea.addKeyListener(new TextComponentSelectionKeyListener(commentTextArea));
@@ -728,6 +774,7 @@ public class RocketComponentConfig extends JPanel {
 	protected JPanel shoulderTab() {
 		JPanel panel = new JPanel(new MigLayout("fillx"));
 		DoubleModel m0 = new DoubleModel(0);
+		register(m0);
 		
 		////  Fore shoulder, not for NoseCone
 		if (!(component instanceof NoseCone)) {
@@ -758,7 +805,9 @@ public class RocketComponentConfig extends JPanel {
 		sub.add(new JLabel(trans.get("RocketCompCfg.lbl.Diameter")));
 
 		m = new DoubleModel(component, "ForeShoulderRadius", 2, UnitGroup.UNITS_LENGTH, 0);
+		register(m);
 		m2 = new DoubleModel(component, "ForeRadius", 2, UnitGroup.UNITS_LENGTH);
+		register(m2);
 
 		spin = new JSpinner(m.getSpinnerModel());
 		spin.setEditor(new SpinnerEditor(spin));
@@ -773,6 +822,7 @@ public class RocketComponentConfig extends JPanel {
 		sub.add(new JLabel(trans.get("RocketCompCfg.lbl.Length")));
 
 		m = new DoubleModel(component, "ForeShoulderLength", UnitGroup.UNITS_LENGTH, 0);
+		register(m);
 
 		spin = new JSpinner(m.getSpinnerModel());
 		spin.setEditor(new SpinnerEditor(spin));
@@ -787,7 +837,9 @@ public class RocketComponentConfig extends JPanel {
 		sub.add(new JLabel(trans.get("RocketCompCfg.lbl.Thickness")));
 
 		m = new DoubleModel(component, "ForeShoulderThickness", UnitGroup.UNITS_LENGTH, 0);
+		register(m);
 		m2 = new DoubleModel(component, "ForeShoulderRadius", UnitGroup.UNITS_LENGTH);
+		register(m2);
 
 		spin = new JSpinner(m.getSpinnerModel());
 		spin.setEditor(new SpinnerEditor(spin));
@@ -800,6 +852,7 @@ public class RocketComponentConfig extends JPanel {
 
 		////  Capped
 		bm = new BooleanModel(component, "ForeShoulderCapped");
+		register(bm);
 		check = new JCheckBox(bm);
 		//// End capped
 		check.setText(trans.get("RocketCompCfg.checkbox.Endcapped"));
@@ -830,7 +883,7 @@ public class RocketComponentConfig extends JPanel {
 			sub.setBorder(null);
 		} else {
 			//// Aft shoulder
-			sub.setBorder(BorderFactory.createTitledBorder(trans.get("RocketCompCfg.title.Aftshoulder")));
+			sub.setBorder(BorderFactory.createTitledBorder(trans.get("RocketCompCfg.border.Aftshoulder")));
 		}
 
 
@@ -839,7 +892,9 @@ public class RocketComponentConfig extends JPanel {
 		sub.add(new JLabel(trans.get("RocketCompCfg.lbl.Diameter")));
 
 		m = new DoubleModel(component, valueNameShoulder+"Radius", 2, UnitGroup.UNITS_LENGTH, 0);
+		register(m);
 		m2 = new DoubleModel(component, valueNameRadius, 2, UnitGroup.UNITS_LENGTH);
+		register(m2);
 
 		spin = new JSpinner(m.getSpinnerModel());
 		spin.setEditor(new SpinnerEditor(spin));
@@ -854,6 +909,7 @@ public class RocketComponentConfig extends JPanel {
 		sub.add(new JLabel(trans.get("RocketCompCfg.lbl.Length")));
 
 		m = new DoubleModel(component, valueNameShoulder+"Length", UnitGroup.UNITS_LENGTH, 0);
+		register(m);
 
 		spin = new JSpinner(m.getSpinnerModel());
 		spin.setEditor(new SpinnerEditor(spin));
@@ -868,7 +924,9 @@ public class RocketComponentConfig extends JPanel {
 		sub.add(new JLabel(trans.get("RocketCompCfg.lbl.Thickness")));
 
 		m = new DoubleModel(component, valueNameShoulder+"Thickness", UnitGroup.UNITS_LENGTH, 0);
+		register(m);
 		m2 = new DoubleModel(component, valueNameShoulder+"Radius", UnitGroup.UNITS_LENGTH);
+		register(m2);
 
 		spin = new JSpinner(m.getSpinnerModel());
 		spin.setEditor(new SpinnerEditor(spin));
@@ -881,6 +939,7 @@ public class RocketComponentConfig extends JPanel {
 
 		////  Capped
 		bm = new BooleanModel(component, valueNameShoulder+"Capped");
+		register(bm);
 		check = new JCheckBox(bm);
 		//// End capped
 		check.setText(trans.get("RocketCompCfg.checkbox.Endcapped"));
@@ -945,15 +1004,16 @@ public class RocketComponentConfig extends JPanel {
 		}
 	}
 	
-	
-	protected void register(Invalidatable model) {
+	@Override
+	public void register(Invalidatable model) {
 		this.invalidatables.add(model);
 	}
-	
-	public void invalidate() {
+
+	@Override
+	public void invalidateMe() {
 		super.invalidate();
 		for (Invalidatable i : invalidatables) {
-			i.invalidate();
+			i.invalidateMe();
 		}
 	}
 	
