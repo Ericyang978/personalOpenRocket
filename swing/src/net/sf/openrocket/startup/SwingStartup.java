@@ -41,6 +41,9 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 
+//NEW
+import net.sf.openrocket.document.DispersionAnalysis;
+
 /**
  * Start the OpenRocket swing application.
  *
@@ -49,11 +52,15 @@ import com.google.inject.Module;
 public class SwingStartup {
 	
 	private final static Logger log = LoggerFactory.getLogger(SwingStartup.class);
-	
+
+	//NEW: DISPERSION ANALYSIS PART
+
 	/**
 	 * OpenRocket startup main method.
 	 */
 	public static void main(final String[] args) throws Exception {
+
+
 
 		// Check for "openrocket.debug" property before anything else
 		checkDebugStatus();
@@ -61,7 +68,7 @@ public class SwingStartup {
 		if (System.getProperty("openrocket.debug.layout") != null) {
 			LayoutUtil.setGlobalDebugMillis(100);
 		}
-		
+
 		// Initialize logging first so we can use it
 		initializeLogging();
 		log.info("Starting up OpenRocket version {}", BuildProperties.getVersion());
@@ -71,18 +78,18 @@ public class SwingStartup {
 		if (!ignoreJRE && !checkJREVersion()) {
 			return;
 		}
-		
+
 		// Check that we're not running headless
 		log.info("Checking for graphics head");
 		checkHead();
-		
+
 		// If running on a MAC set up OSX UI Elements.
 		if (SystemInfo.getPlatform() == Platform.MAC_OS) {
 			OSXSetup.setupOSX();
 		}
-		
+
 		final SwingStartup runner = new SwingStartup();
-		
+
 		// Run the actual startup method in the EDT since it can use progress dialogs etc.
 		log.info("Moving startup to EDT");
 		SwingUtilities.invokeAndWait(new Runnable() {
@@ -91,8 +98,9 @@ public class SwingStartup {
 				runner.runInEDT(args);
 			}
 		});
-		
+
 		log.info("Startup complete");
+
 		
 	}
 

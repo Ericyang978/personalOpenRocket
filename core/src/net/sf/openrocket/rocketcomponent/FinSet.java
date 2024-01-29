@@ -5,6 +5,7 @@ import java.util.*;
 import java.util.ArrayList;
 
 
+import com.sun.xml.bind.v2.runtime.output.SAXOutput;
 import net.sf.openrocket.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -792,16 +793,27 @@ public abstract class FinSet extends ExternalComponent implements AxialPositiona
 		// w2 and h2 are squares of the fin width and height
 		double w = getLength();
 		double h = getSpan();
+
+//		System.out.println("length is " + w);
+//		System.out.println("span is " + h);
+
 		double w2, h2;
 
 		// If either h or w is 0, we punt and treat the fin as square
 		if (MathUtil.equals(h * w, 0)) {
 			w2 = singlePlanformArea;
 			h2 = singlePlanformArea;
+
 		} else {
 			w2 = w * singlePlanformArea / h;
 			h2 = h * singlePlanformArea / w;
+//			System.out.println("hi");
 		}
+
+//		System.out.println("area is " + singlePlanformArea);
+//
+//		System.out.println("length2 is " + w2);
+//		System.out.println("span2 is " + h2);
 
 		// Iyy = h * w^3 / 12, so Iyy/M = w^2 / 12
 		// Izz = h * w * (h^2 + w^2) / 12, so Izz/M = (h^2 + w^2) / 12
@@ -817,6 +829,15 @@ public abstract class FinSet extends ExternalComponent implements AxialPositiona
 		// is along Y).  Since our moment of inertia is the average of Iyy and Izz,
 		// this is accomplished by just weighting the transformation from the theorem
 		// by 1/2
+//		System.out.println("nonAdjustedInertia " + inertia);
+//		System.out.println( "adjust factor " + MathUtil.pow2(MathUtil.safeSqrt(h2) / 2 + getBodyRadius()) / 2);
+//		System.out.println("inerita fins long is " + inertia + MathUtil.pow2(MathUtil.safeSqrt(h2) / 2 + getBodyRadius()) / 2);
+
+//		System.out.println("body radius is " + getBodyRadius());
+//		System.out.println("h2 sqare root is " + MathUtil.safeSqrt(h2));
+
+//		System.out.println("total inertia is " + (inertia + MathUtil.pow2(MathUtil.safeSqrt(h2) / 2 + getBodyRadius()) / 2));
+
 		return inertia + MathUtil.pow2(MathUtil.safeSqrt(h2) / 2 + getBodyRadius()) / 2;
 	}
 	
@@ -859,6 +880,7 @@ public abstract class FinSet extends ExternalComponent implements AxialPositiona
 			return inertia;
 
 		// Move axis to center of FinSet using Parallel Axis Theorem
+		double x = inertia + MathUtil.pow2(MathUtil.safeSqrt(h2) / 2 + getBodyRadius());
 		return inertia + MathUtil.pow2(MathUtil.safeSqrt(h2) / 2 + getBodyRadius());
 	}
 	

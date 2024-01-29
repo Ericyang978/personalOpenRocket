@@ -7,7 +7,7 @@ import net.sf.openrocket.simulation.extension.AbstractSimulationExtensionProvide
 public class AirStartProvider extends AbstractSimulationExtensionProvider {
 	
 	public AirStartProvider() {
-		super(AirStart.class, "Launch conditions", "Air-start");
+		super(AirStart.class, "Launch conditions", "Air-start-sad");
 	}
 	
 }

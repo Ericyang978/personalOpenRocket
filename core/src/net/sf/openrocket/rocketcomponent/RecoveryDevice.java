@@ -28,7 +28,21 @@ public abstract class RecoveryDevice extends MassObject implements FlightConfigu
 	private Material.Surface material;
 
 	private FlightConfigurableParameterSet<DeploymentConfiguration> deploymentConfigurations;
-	
+
+	//TODO: NEW ERIC VARIABLE (adds ability to change deployment time)
+
+	public void setDeploymentTime(double delay) {
+
+		//This syntax is specific for each parachute
+		//From the deployment figurations of recovery devices, follows the data structure to get to a map, than a collection
+		// and then takes the first element of collection (using .iterator().next()).
+		deploymentConfigurations.map.values().iterator().next().setDeployDelay(delay);
+
+	}
+
+	public void setDeploymentAltitude(double altitude) {
+		deploymentConfigurations.map.values().iterator().next().setDeployDelay(altitude);
+	}
 	public RecoveryDevice() {
 		this.deploymentConfigurations =
 				new FlightConfigurableParameterSet<DeploymentConfiguration>( new DeploymentConfiguration());

@@ -183,6 +183,7 @@ public class SymmetricComponentCalc extends RocketComponentCalc {
 	
 	@Override
 	public double calculateFrictionCD(FlightConditions conditions, double componentCf, WarningSet warningSet) {
+//		System.out.println(wetArea);
 		return componentCf * wetArea / conditions.getRefArea();
 	}
 

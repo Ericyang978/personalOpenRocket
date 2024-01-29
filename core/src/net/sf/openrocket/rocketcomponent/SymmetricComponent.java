@@ -491,7 +491,15 @@ public abstract class SymmetricComponent extends BodyComponent implements BoxBou
 		longitudinalInertia /= vol;
 		
 		// Shift longitudinal inertia to CG
+
+		System.out.println("the unit rotational inertia non CG " + longitudinalInertia);
+		System.out.println("adjust to CG is " + getComponentCG().x );
+
+
 		longitudinalInertia = Math.max(longitudinalInertia - pow2(getComponentCG().x), 0);
+
+		System.out.println("the unit rotational inertia is " + rotationalInertia);
+		System.out.println("the unit longitudinalInertia is " + longitudinalInertia);
 	}
 	
 	
@@ -549,6 +557,9 @@ public abstract class SymmetricComponent extends BodyComponent implements BoxBou
 		
 		// Shift longitudinal inertia to CG
 		longitudinalInertia = Math.max(longitudinalInertia - pow2(getComponentCG().x), 0);
+
+
+
 	}
 	
 	

@@ -5,6 +5,8 @@ import java.util.EventListener;
 import java.util.EventObject;
 import java.util.List;
 
+import net.sf.openrocket.models.wind.PinkNoiseWindModel;
+import net.sf.openrocket.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,11 +30,6 @@ import net.sf.openrocket.simulation.exception.SimulationException;
 import net.sf.openrocket.simulation.extension.SimulationExtension;
 import net.sf.openrocket.simulation.listeners.SimulationListener;
 import net.sf.openrocket.startup.Application;
-import net.sf.openrocket.util.ArrayList;
-import net.sf.openrocket.util.BugException;
-import net.sf.openrocket.util.ChangeSource;
-import net.sf.openrocket.util.SafetyMutex;
-import net.sf.openrocket.util.StateChangeListener;
 
 /**
  * A class defining a simulation, its conditions and simulated data.
@@ -405,9 +402,20 @@ public class Simulation implements ChangeSource, Cloneable {
 			long t1, t2;
 			log.debug("Simulation: calling simulator");
 			t1 = System.currentTimeMillis();
-			simulatedData = simulator.simulate(simulationConditions);
-			t2 = System.currentTimeMillis();
-			log.debug("Simulation: returning from simulator, simulation took " + (t2 - t1) + "ms");
+
+			//TODO: NEW stuff from Eric
+			boolean dispAnalysis = true;
+			if (dispAnalysis){
+				DispersionAnalysis analysis = new DispersionAnalysis(simulationConditions);
+				analysis.loopSim();
+			}
+
+			else{
+				simulatedData = simulator.simulate(simulationConditions);
+				t2 = System.currentTimeMillis();
+				log.debug("Simulation: returning from simulator, simulation took " + (t2 - t1) + "ms");
+			}
+
 
 		} catch (SimulationException e) {
 			simulatedData = e.getFlightData();
@@ -417,14 +425,17 @@ public class Simulation implements ChangeSource, Cloneable {
 			simulatedConditions = options.clone();
 			simulatedConfigurationDescription = descriptor.format( this.rocket, getId());
 			simulatedConfigurationID = getActiveConfiguration().getModID();
-			
+
 			status = Status.UPTODATE;
 			fireChangeEvent();
 
 			mutex.unlock("simulate");
 		}
+
+
 	}
-	
+
+
 	
 	/**
 	 * Return the conditions used in the previous simulation, or <code>null</code>

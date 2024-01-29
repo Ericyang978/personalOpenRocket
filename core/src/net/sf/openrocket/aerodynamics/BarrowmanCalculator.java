@@ -4,6 +4,7 @@ import static net.sf.openrocket.util.MathUtil.pow2;
 
 import java.util.*;
 
+import com.google.common.annotations.VisibleForTesting;
 import net.sf.openrocket.logging.Warning;
 import net.sf.openrocket.logging.WarningSet;
 import net.sf.openrocket.rocketcomponent.AxialStage;
@@ -68,6 +69,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 			WarningSet warnings) {
 		checkCache(configuration);
 		AerodynamicForces forces = calculateNonAxialForces(configuration, conditions, warnings);
+
 		return forces.getCP();
 	}
 	
@@ -200,6 +202,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 		total.setCD(total.getFrictionCD() + total.getPressureCD() + total.getBaseCD() + total.getOverrideCD());
 		
 		total.setCDaxial(calculateAxialCD(conditions, total.getCD()));
+//		System.out.println("Get Aerodyanmic forces called");
 		
 		// Calculate pitch and yaw damping moments
 		calculateDampingMoments(configuration, conditions, total);
@@ -414,7 +417,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 	 * 
 	 * @param configuration		Rocket configuration
 	 * @param conditions		Flight conditions taken into account
-	 * @param map				?
+//	 * @param map				?
 	 * @param warningSet		Set to handle warnings
 	 * @return friction drag for entire rocket
 	 */
@@ -424,6 +427,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 		double mach = conditions.getMach();
 		double Re = calculateReynoldsNumber(configuration, conditions);
 		double Cf = calculateFrictionCoefficient(configuration, mach, Re);
+
 		double roughnessCorrection = calculateRoughnessCorrection(mach);
 		
 		if (calcMap == null)
@@ -628,6 +632,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 			
 		}
 
+//		System.out.println("rocket CF is" + Cf);
 		return Cf;
 	}
 
@@ -738,7 +743,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 	 * 
 	 * @param configuration		Rocket configuration
 	 * @param conditions		Flight conditions taken into account
-	 * @param map				?
+//	 * @param map				?
 	 * @param warnings				all current warnings
 	 * @return
 	 */
@@ -941,6 +946,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 		
 		// find magnitude of damping moments, and clamp so they can't
 		// exceed magnitude of pitch and yaw moments
+
 		double pitchDampingMomentMagnitude = MathUtil.min(mul * pow2(pitchRate / velocity), total.getCm());
 		double yawDampingMomentMagnitude = MathUtil.min(mul * pow2(yawRate / velocity), total.getCyaw());
 
@@ -964,6 +970,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 				}
 			}
 			if (cacheLength > 0)
+//				System.out.println(area);
 				cacheDiameter = area / cacheLength;
 		}
 		
@@ -972,12 +979,15 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 		// Body
 		mul = 0.275 * cacheDiameter / (conditions.getRefArea() * conditions.getRefLength());
 		mul *= (MathUtil.pow4(cgx) + MathUtil.pow4(cacheLength - cgx));
-		
+
+
 		// Fins
 		// TODO: LOW: This could be optimized a lot...
 		for (RocketComponent c : configuration.getActiveComponents()) {
 			if (c instanceof FinSet) {
 				FinSet f = (FinSet) c;
+
+
 				mul += 0.6 * Math.min(f.getFinCount(), 4) * f.getPlanformArea() *
 						MathUtil.pow3(Math.abs(f.toAbsolute(new Coordinate(
 								((FinSetCalc) calcMap.get(f)).getMidchordPos()))[0].x

@@ -1,8 +1,11 @@
 package net.sf.openrocket.simulation;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Random;
 
+import net.sf.openrocket.models.wind.PinkNoiseWindModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,10 +63,24 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 	Deque<SimulationStatus> toSimulate = new ArrayDeque<SimulationStatus>();
 
 	FlightData flightData;
-	
+
+	//TODO: NEW Eric VARIABLE, 100 is arbitrary, each index * 100m represents altitude
+	private double [] altToWind; //used for Variable wind
+	private double [] altToWindDirection; //used for Variable wind direction
+
+	private boolean variableWindBoolean = false; //used for Variable wind
+	private SimulationConditions simCond; //used for Variable wind
+	private ArrayList<SimulationStatus> fullFlightStatus = new ArrayList<>(); //used to store all flight conditions every time step
+
+
+	//IMPORTANT
 	@Override
 	public FlightData simulate(SimulationConditions simulationConditions) throws SimulationException {
-		
+
+		//TODO ERIC:
+		simCond = simulationConditions;
+		//end eric
+
 		// Set up flight data
 		flightData = new FlightData();
 		
@@ -107,7 +124,7 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 			currentStatus = toSimulate.pop();
 			log.info(">>Starting simulation of branch: "+currentStatus.getFlightData().getBranchName());
 			
-			FlightDataBranch dataBranch = simulateLoop();
+			FlightDataBranch dataBranch = simulateLoop(); //ACTUALLY SIM RUNS HERE
 			flightData.addBranch(dataBranch);
 			flightData.getWarningSet().addAll(currentStatus.getWarnings());
 			
@@ -131,7 +148,36 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 
 		return flightData;
 	}
-	
+
+	//TODO NEW ERIC METHODs, updating wind based on altitude
+
+	public void setAltToWind(double [] altToWind, double[] altToWindDirection){
+		this.altToWind = altToWind;
+		this.altToWindDirection = altToWindDirection;
+		variableWindBoolean = true;
+	}
+	//interval represents the difference in height from one index to another, i.e, (i-1)+interval=i
+	public void updateWind(){
+		//assuming interval is 100
+		int interval = 100;
+		int indexAltitude = (int) currentStatus.getRocketPosition().z/interval;
+		double wind = (altToWind[indexAltitude] + altToWind[indexAltitude+1])/2; //very basic weighted average
+		double windDirection = (altToWindDirection[indexAltitude] + altToWindDirection[indexAltitude+1])/2;
+
+		//Defining the new wind model, changes avg everything else the same, this will break of a pink noise wind model doesn't work
+
+		PinkNoiseWindModel currWindModel =  (PinkNoiseWindModel) currentStatus.getSimulationConditions().getWindModel();
+		currWindModel.setAverage(wind); //this should change currentstatus and thus the sim output.... ERRORMODE
+		currWindModel.setDirection(windDirection); //sets wind direction
+	}
+
+	//TODO: New method eric
+	public SimulationStatus getCurrentStatus(){
+		return currentStatus;
+	}
+	public ArrayList<SimulationStatus> getAllStatus(){return fullFlightStatus;}
+	//end Eric
+
 	private FlightDataBranch simulateLoop() throws SimulationException {
 		
 		// Initialize the simulation.  We'll use the flight stepper unless we're already on the ground
@@ -139,7 +185,10 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 			currentStepper = groundStepper;
 		else
 			currentStepper = flightStepper;
-		
+		//TODO NEW ERIC CODE
+			fullFlightStatus.add(currentStatus);
+		//end Eric
+
 		currentStatus = currentStepper.initialize(currentStatus);
 		double previousSimulationTime = currentStatus.getSimulationTime();
 		
@@ -155,7 +204,13 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 			while (handleEvents()) {
 				// Take the step
 				double oldAlt = currentStatus.getRocketPosition().z;
-				
+
+				//TODO: NEW eric code, used for changing wind based on altitude
+				if (variableWindBoolean){
+					updateWind();
+				}
+				//End of eric code
+
 				if (SimulationListenerHelper.firePreStep(currentStatus)) {
 					// Step at most to the next event
 					double maxStepTime = Double.MAX_VALUE;
@@ -168,7 +223,14 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 					}
 					
 					log.trace("Taking simulation step at t=" + currentStatus.getSimulationTime() + " altitude " + oldAlt);
+
 					currentStepper.step(currentStatus, maxStepTime);
+
+					//TODO NEW ERIC CODE
+					fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
+//					System.out.println(currentStatus.getRocketPosition() + " " + currentStatus.getSimulationTime() + " " + ((PinkNoiseWindModel) currentStatus.getSimulationConditions().getWindModel()).getAverage());
+//					System.out.println();
+					//end Eric
 				}
 				SimulationListenerHelper.firePostStep(currentStatus);
 				

@@ -102,13 +102,21 @@ public class FinSetCalc extends RocketComponentCalc {
 		
 		// One fin without interference (both sub- and supersonic):
 		double cna1 = calculateFinCNa1(conditions);
-			
+//		System.out.println("Cna1 is " + cna1 );
+
 		// Multiple fins with fin-fin interference
 		double cna;
 		double theta = conditions.getTheta();
 		double angle = transform.getXrotation();
 
+
+		double angle2 = transform.getXrotation();
+
 		// Compute basic CNa without interference effects
+//		System.out.println("theta is " + theta);
+//		System.out.println("angle is " + angle);
+//		System.out.println("multipier is " + MathUtil.pow2(Math.sin(theta - angle)));
+
 		cna = cna1 * MathUtil.pow2(Math.sin(theta - angle));
 //		final double cna_x = cna1 * MathUtil.pow2(Math.sin(theta - angle));
 //		final double cna_y = cna1 * MathUtil.pow2(Math.sin(theta - angle));
@@ -146,13 +154,20 @@ public class FinSetCalc extends RocketComponentCalc {
 			warnings.add(Warning.PARALLEL_FINS);
 			break;
 		}
-				
+
+//		System.out.println("Cna1 after multiplier " + cna );
+
+
 		// Body-fin interference effect
 		double r = bodyRadius;
 		double tau = r / (span + r);
 		if (Double.isNaN(tau) || Double.isInfinite(tau))
 			tau = 0;
 		cna *= 1 + tau; // Classical Barrowman
+//		System.out.println("tau is " + tau );
+//		System.out.println("cna after tau is " + cna );
+
+
 		//		cna *= pow2(1 + tau);	// Barrowman thesis (too optimistic??)
 		//		logger.debug("Component cna = {}", cna);
 		
@@ -186,7 +201,8 @@ public class FinSetCalc extends RocketComponentCalc {
 		//		System.out.printf(component.getName() + ":  roll rate:%.3f  force:%.3f  damp:%.3f  " +
 		//				"total:%.3f\n",
 		//				conditions.getRollRate(), forces.CrollForce, forces.CrollDamp, forces.Croll);
-		
+
+//		System.out.println("Final CNa is " +  cna);
 		forces.setCNa(cna);
 		forces.setCN(cna * MathUtil.min(conditions.getAOA(), STALL_ANGLE));
 		forces.setCP(new Coordinate(x, 0, 0, cna));
@@ -422,6 +438,10 @@ public class FinSetCalc extends RocketComponentCalc {
 		
 		// Subsonic case
 		if (mach <= CNA_SUBSONIC) {
+//			System.out.println("Beta is " + (1 - pow2(mach)));
+//			System.out.println("fin Area is " + finArea);
+//			System.out.println("cos(gamma) is " + cosGamma);
+//			System.out.println("span is " + span);
 			return 2 * Math.PI * pow2(span) / (1 + MathUtil.safeSqrt(1 + (1 - pow2(mach)) *
 					pow2(pow2(span) / (finArea * cosGamma)))) / ref;
 		}
@@ -452,7 +472,8 @@ public class FinSetCalc extends RocketComponentCalc {
 	
 	private double calculateDampingMoment(FlightConditions conditions) {
 		double rollRate = conditions.getRollRate();
-		
+
+
 		if (Math.abs(rollRate) < 0.1)
 			return 0;
 		
@@ -668,7 +689,8 @@ public class FinSetCalc extends RocketComponentCalc {
 			cd += baseCD / 2;
 		}
 		// Airfoil assumed to have zero base drag
-		
+
+//		System.out.println("fin Cd is " + cd);
 		// Scale to correct reference area
 		cd *= span * thickness / conditions.getRefArea();
 		

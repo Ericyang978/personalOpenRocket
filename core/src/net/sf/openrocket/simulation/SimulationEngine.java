@@ -20,5 +20,5 @@ public interface SimulationEngine {
 	 */
 	public FlightData simulate(SimulationConditions simulation)
 		throws SimulationException;
-	
+
 }
