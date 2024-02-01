@@ -1,10 +1,12 @@
 package net.sf.openrocket.database;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 
+
+import com.google.common.io.Files;
 import net.sf.openrocket.file.iterator.DirectoryIterator;
 import net.sf.openrocket.file.iterator.FileIterator;
 import net.sf.openrocket.gui.util.SimpleFileFilter;
@@ -89,7 +91,40 @@ public class ComponentPresetDatabaseLoader extends AsynchronousDatabaseLoader {
 	 */
 	private void loadPresetComponents() {
 		log.info("Loading component presets from " + SYSTEM_PRESET_DIR);
-		FileIterator iterator = DirectoryIterator.findDirectory(SYSTEM_PRESET_DIR, new SimpleFileFilter("", false, "orc"));
+		//New Eric Code
+//		String dirPath = "./swing/resources-src/datafiles/components-openrocket/newfile.txt";
+//		String fileName = "newfile.txt";
+//		File file = new File(dirPath);
+//
+//		try {
+//
+//
+//			// Create the file
+//			file.createNewFile();
+//
+//			// Get the file output stream
+//			FileOutputStream fos = new FileOutputStream(file);
+//
+//			// Specify the content
+//			String content = "Hello, world!";
+//
+//			// Convert the string to bytes
+//			byte[] contentInBytes = content.getBytes();
+//
+//			// Write the bytes to the file
+//			fos.write(contentInBytes);
+//
+//			// Close the output stream
+//			fos.close();
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
+		/** Very Important, changed file updator to "./swing/resources-src/datafiles/components-openrocket", instead of Systems_Present_DIR"*/
+		FileIterator iterator = DirectoryIterator.findDirectory("./swing/resources-src/datafiles/components-openrocket", new SimpleFileFilter("", false, "orc"));
+
+		//END eric code
+
+//		FileIterator iterator = DirectoryIterator.findDirectory(SYSTEM_PRESET_DIR, new SimpleFileFilter("", false, "orc"));
 		
 		if(iterator == null)
 			return;

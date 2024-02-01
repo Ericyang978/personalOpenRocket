@@ -39,7 +39,13 @@ public class DispersionAnalysis {
     //How calls flow: Simulator -> simulationEngine interface, specifically BasicEventSimulationEngine,
     //-> simulationConditions ->
 
-    //CHANGES MADE: Simulation, BasicEventSimulationEngine, SimulationEngine, Recovery Device,
+    /**CHANGES MADE to the following classes:
+     * Simulation
+     * BasicEventSimulationEngine
+     * SimulationEngine
+     * Recovery Device,
+     * OpenRocketComponentLoader - this was to fix the parachute database not appearing mysteriously
+     */
 
     //Fundamental variables: DO NOT CHANGE
     private SimulationConditions conditions;
@@ -91,8 +97,12 @@ public class DispersionAnalysis {
 
     //ROCKET VARS
 
-    private double deploymentTime;
-    private double depolymentAltitude;
+    private ArrayList<RecoveryDevice> recoveryDevices;
+    private double deploymentTimeDrogue;
+    private double depolymentAltitudeDrogue;
+
+    private double deploymentTimeMain;
+    private double depolymentAltitudeMain;
 
 
     /**
@@ -115,7 +125,7 @@ public class DispersionAnalysis {
 
 
         //DATA, values can change depending on how many iterations occur
-        data = new Double[1000][11 + 1]; //plus 1 adds an extra row for index, 11 params, 6 output 5 input
+        data = new Double[1000][12 + 1]; //plus 1 adds an extra row for index, 11 params, 6 output 6 input
 
         //CHANGEABLE vars:
 
@@ -129,7 +139,7 @@ public class DispersionAnalysis {
 
         //WIND Vars
         averageWindSpeed = 5;
-        windSpeedDeviation = .2;
+        windSpeedDeviation = 0;
         windDirection = 0;
         windTurbulence = 0;
 
@@ -147,20 +157,29 @@ public class DispersionAnalysis {
         windModel.setTurbulenceIntensity(windTurbulence);
 
         //ROCKET VARS
-        deploymentTime = 50;
-        depolymentAltitude = 15000;
+        deploymentTimeDrogue = 50;
+        depolymentAltitudeDrogue = 15000;
+
+        deploymentTimeMain = 50;
+        depolymentAltitudeMain = 15000;
+
+        recoveryDevices = new ArrayList<>();
+        // finds the recover devices using recursive search
+        findRecoveryDevices(conditions.getSimulation().getRocket());
+
+
 
     }
 
     //This determines the parameters to be looped over
     public void loopSim() throws SimulationException {
 
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i <20; i++) {
             configSimConditions();
             runSimulation();
 
             randomSeed = new Random().nextInt();
-            deploymentTime += 5;
+            deploymentTimeMain += 5;
 
 
             //associates the 4 wind speed parameters to the wind model
@@ -212,10 +231,43 @@ public class DispersionAnalysis {
         // Gets simulation -> rocket -> Sustainer -> Body (multiple, must pick correct) -> inner tube
         //NOTE: this sequence of .getChild(int n) is arbitrary, depends on what the rocket tree looks like (can figure this out
         //just by looking at the tree on the GUI, or using debug in intellij and looking down the inheritance.
-        RocketComponent rocket = conditions.getSimulation().getRocket().getChild(0).getChild(1).getChild(1).getChild(0);
-        RecoveryDevice recover = (RecoveryDevice) rocket;
 
-        recover.setDeploymentTime(deploymentTime);
+        //one parachute, assume main
+        if (recoveryDevices.size() ==1) {
+            recoveryDevices.get(0).setDeploymentTime(deploymentTimeMain);
+
+        }
+        //Two parachutes, one main one drouge, need to figure out which is which
+        else {
+            //the main will be bigger. if .get(0) is bigger, then .get(0) is main
+            if (((Parachute) recoveryDevices.get(0)).getDiameter() > ((Parachute) recoveryDevices.get(1)).getDiameter()) {
+                (recoveryDevices.get(0)).setDeploymentTime(deploymentTimeMain);
+                (recoveryDevices.get(1)).setDeploymentTime(deploymentTimeDrogue);
+
+            } else {
+                (recoveryDevices.get(0)).setDeploymentTime(deploymentTimeDrogue);
+                (recoveryDevices.get(1)).setDeploymentTime(deploymentTimeMain);
+
+            }
+        }
+
+
+    }
+
+    public void findRecoveryDevices(RocketComponent r){
+        //base case 1: it is a recovery device
+        if (r instanceof RecoveryDevice){
+            recoveryDevices.add((RecoveryDevice) r);
+            return;
+        }
+        //base case 2: it is null
+        if (r == null){
+            return;
+        }
+        for (int i =0; i < r.getChildCount(); i++){
+            findRecoveryDevices(r.getChild(i));
+        }
+
     }
 
     //Runs one single simulation
@@ -231,25 +283,25 @@ public class DispersionAnalysis {
         data[index][2] = windSpeedDeviation;
         data[index][3] = windDirection;
         data[index][4] = windTurbulence;
-        data[index][5] = deploymentTime;
+        data[index][5] = deploymentTimeDrogue;
+        data[index][6] = deploymentTimeMain;
 
         //Full flight data contains all positions, velocities, accelerations, etc. during a flight
         ArrayList<SimulationStatus> allflightData = ((BasicEventSimulationEngine) simulator).getAllStatus();
         //We only care about final position, so get only position in last entry of flight data
-        data[index][6] = allflightData.get(allflightData.size() - 1).getRocketPosition().x;
-        data[index][7] = allflightData.get(allflightData.size() - 1).getRocketPosition().y;
-        data[index][8] = allflightData.get(allflightData.size() - 1).getRocketPosition().z;
-        data[index][9] = flightSummary.getMaxAltitude();
-        data[index][10] = flightSummary.getDeploymentVelocity();
-        data[index][11] = flightSummary.getGroundHitVelocity();
-
+        data[index][7] = allflightData.get(allflightData.size() - 1).getRocketPosition().x;
+        data[index][8] = allflightData.get(allflightData.size() - 1).getRocketPosition().y;
+        data[index][9] = allflightData.get(allflightData.size() - 1).getRocketPosition().z;
+        data[index][10] = flightSummary.getMaxAltitude();
+        data[index][11] = flightSummary.getDeploymentVelocity();
+        data[index][12] = flightSummary.getGroundHitVelocity();
         index++;
     }
 
 
     public void exportData() {
         Object[] columnNames = {"number", "avg Wind speed", "windSpeed standard dev", "wind direction", "wind Turbulence",
-                "deploymentTime", "positionEast of Launch (m)", "position North of Launch (m)",
+                "deploymentTime Drogue", "deploymentTime Main", "positionEast of Launch (m)", "position North of Launch (m)",
                 "altitude(m)", "Max altitude", "deployment Velocity", "groundSpeedVelocity"};
 
         //suspicious, could cause problem cuz wrapping in double, not primitive type double

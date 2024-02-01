@@ -32,6 +32,8 @@ import net.sf.openrocket.simulation.extension.SimulationExtension;
 import net.sf.openrocket.simulation.listeners.SimulationListener;
 import net.sf.openrocket.startup.Application;
 
+
+
 /**
  * A class defining a simulation, its conditions and simulated data.
  * <p>
@@ -428,17 +430,25 @@ public class Simulation implements ChangeSource, Cloneable {
 			t1 = System.currentTimeMillis();
 
 			//TODO: NEW stuff from Eric
+			final long startTime = System.currentTimeMillis();
 			boolean dispAnalysis = true;
-			if (dispAnalysis){
+			boolean guidance = false;
+			if (dispAnalysis){ //dispersion analysis for seb
 				DispersionAnalysis analysis = new DispersionAnalysis(simulationConditions);
 				analysis.loopSim();
 			}
-
+			else if (guidance) { //guidance for MEMS rocket proj
+				GuidanceSim guideSim = new GuidanceSim(simulationConditions);
+				guideSim.runSim();
+			}
 			else{
 				simulatedData = simulator.simulate(simulationConditions);
 				t2 = System.currentTimeMillis();
 				log.debug("Simulation: returning from simulator, simulation took " + (t2 - t1) + "ms");
 			}
+			final long endtime = System.currentTimeMillis();
+			System.out.println("time elapsed "+  (endtime-startTime));
+			//end eric
 
 
 		} catch (SimulationException e) {
