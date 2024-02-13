@@ -5,7 +5,6 @@ import java.util.EventListener;
 import java.util.EventObject;
 import java.util.List;
 
-import net.sf.openrocket.models.wind.PinkNoiseWindModel;
 import net.sf.openrocket.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -431,14 +430,14 @@ public class Simulation implements ChangeSource, Cloneable {
 
 			//TODO: NEW stuff from Eric
 			final long startTime = System.currentTimeMillis();
-			boolean dispAnalysis = true;
-			boolean guidance = false;
+			boolean dispAnalysis = false;
+			boolean guidance = true;
 			if (dispAnalysis){ //dispersion analysis for seb
 				DispersionAnalysis analysis = new DispersionAnalysis(simulationConditions);
 				analysis.loopSim();
 			}
 			else if (guidance) { //guidance for MEMS rocket proj
-				GuidanceSim guideSim = new GuidanceSim(simulationConditions);
+				GuidanceEngine guideSim = new GuidanceEngine(simulationConditions);
 				guideSim.runSim();
 			}
 			else{

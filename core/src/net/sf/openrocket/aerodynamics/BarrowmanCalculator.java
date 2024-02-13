@@ -257,7 +257,7 @@ public class BarrowmanCalculator extends AbstractAerodynamicCalculator {
 			warnings.add(new Warning.LargeAOA(conditions.getAOA()));
 
 		if (calcMap == null)
-			buildCalcMap(configuration);
+		buildCalcMap(configuration); //ERROR MODE: doesn't build a calc map with updated fin values, so calcs are wrong
 
 		checkGeometry(configuration, configuration.getRocket(), warnings);
 		

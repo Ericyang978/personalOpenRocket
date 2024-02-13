@@ -1,5 +1,6 @@
 package net.sf.openrocket.simulation;
 
+import net.sf.openrocket.aerodynamics.FlightConditions;
 import net.sf.openrocket.simulation.exception.SimulationException;
 
 public interface SimulationStepper {
@@ -21,5 +22,6 @@ public interface SimulationStepper {
 	 * 						from stepping over upcoming flight events (motor ignition etc).
 	 */
 	public void step(SimulationStatus status, double maxTimeStep) throws SimulationException;
-	
+
+
 }

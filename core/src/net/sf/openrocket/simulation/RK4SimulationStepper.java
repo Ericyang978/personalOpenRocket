@@ -664,7 +664,17 @@ public class RK4SimulationStepper extends AbstractSimulationStepper {
 		data.setValue(FlightDataType.TYPE_COMPUTATION_TIME,
 				(System.nanoTime() - status.getSimulationStartWallTime()) / 1000000000.0);
 	}
-	
+
+	//NEW ERIC CODE
+	public FlightConditions getFlightConditions(){
+		return store.flightConditions;
+	}
+
+	public AccelerationData getAccelerationData(){
+		return store.accelerationData;
+	}
+	//end eric code
+
 	
 
 

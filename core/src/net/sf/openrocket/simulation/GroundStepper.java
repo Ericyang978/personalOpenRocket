@@ -1,5 +1,6 @@
 package net.sf.openrocket.simulation;
 
+import net.sf.openrocket.aerodynamics.FlightConditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,4 +23,6 @@ public class GroundStepper extends AbstractSimulationStepper {
 		log.trace("step:  position=" + status.getRocketPosition() + ", velocity=" + status.getRocketVelocity());
 		status.setSimulationTime(status.getSimulationTime() + timeStep);
 	}
+
+
 }

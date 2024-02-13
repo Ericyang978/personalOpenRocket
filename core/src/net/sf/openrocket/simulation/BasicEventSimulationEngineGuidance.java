@@ -1,6 +1,7 @@
 package net.sf.openrocket.simulation;
 
 import net.sf.openrocket.aerodynamics.FlightConditions;
+import net.sf.openrocket.document.RollControlModel;
 import net.sf.openrocket.l10n.Translator;
 import net.sf.openrocket.logging.SimulationAbort;
 import net.sf.openrocket.logging.Warning;
@@ -15,15 +16,14 @@ import net.sf.openrocket.simulation.exception.SimulationException;
 import net.sf.openrocket.simulation.listeners.SimulationListenerHelper;
 import net.sf.openrocket.simulation.listeners.system.OptimumCoastListener;
 import net.sf.openrocket.startup.Application;
+import net.sf.openrocket.unit.UnitGroup;
 import net.sf.openrocket.util.Coordinate;
 import net.sf.openrocket.util.MathUtil;
 import net.sf.openrocket.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
+import java.util.*;
 
 
 public class BasicEventSimulationEngineGuidance implements SimulationEngine {
@@ -61,8 +61,18 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 	private double [] altToWindDirection; //used for Variable wind direction
 
 	private boolean variableWindBoolean = false; //used for Variable wind
+
+	//Guidance Variables
 	private SimulationConditions simCond; //used for Variable wind
 	private ArrayList<SimulationStatus> fullFlightStatus = new ArrayList<>(); //used to store all flight conditions every time step
+
+	private RollControlModel rollControlModel; // implements a roll control model
+	private ArrayList<Double> canard1Angle = new ArrayList<>(); //used to track canard 1 angle over flight
+	private ArrayList<Double> canard2Angle = new ArrayList<>(); //used to track canard 2 angle over flight
+	private ArrayList<Double> rollRates = new ArrayList<>();
+	private ArrayList<Coordinate> rotationalAccelerations = new ArrayList<>();
+
+	private boolean allowRoll = false; //introduces sudden change in roll that can be tested
 
 
 	//IMPORTANT
@@ -157,11 +167,8 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 		return flightData;
 	}
 
+
 	//TODO: New method eric
-	public SimulationStatus getCurrentStatus(){
-		return currentStatus;
-	}
-	public ArrayList<SimulationStatus> getAllStatus(){return fullFlightStatus;}
 
 	/**
 	 * Sets cant angle of the canards
@@ -171,10 +178,104 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 	 */
 	public void setCanardCant(double cant1, double cant2){
 		// The file path depends on the structure of the rocket, will need to change depending on rocket
-		TrapezoidFinSet CanardOne = (TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(1);
-		TrapezoidFinSet CanardTwo = (TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(2);
-		CanardOne.setCantAngle(cant1);
-		CanardTwo.setCantAngle(cant2);
+//		TrapezoidFinSet CanardOne = (TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(1);
+//		TrapezoidFinSet CanardTwo = (TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(2);
+//		CanardOne.setCantAngle(cant1);
+//		CanardTwo.setCantAngle(cant2);
+
+		//ACTUAL IMPLEMENTATION- NEED TO CHANGE ACTIVE INSTANCE (currentstatus.getConfiguration().getactiveInstances
+		// NOT DIRECTLY CANARD, not this --> (TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(1);
+		InstanceMap imap = currentStatus.getConfiguration().getActiveInstances();
+		for(Map.Entry<RocketComponent, ArrayList<InstanceContext>> mapEntry: imap.entrySet() ) {
+			final RocketComponent comp = mapEntry.getKey();
+
+			if (comp.getName().equals("Canard1")){
+				((TrapezoidFinSet) comp).setCantAngle(cant1);
+				canard1Angle.add(cant1);
+
+			}
+			if (comp.getName().equals("Canard2")){
+				((TrapezoidFinSet) comp).setCantAngle(cant2);
+				canard2Angle.add(cant2);
+			}
+
+
+		}
+
+	}
+
+	//Sets roll control, called by guidance engine
+	public void setRollControlModel(RollControlModel rollControlModel){
+		this.rollControlModel = rollControlModel;
+	}
+	public SimulationStatus getCurrentStatus(){
+		return currentStatus;
+	}
+	public ArrayList<SimulationStatus> getAllStatus(){return fullFlightStatus;}
+
+	public ArrayList<Double> getCanard1Angle(){return canard1Angle;}
+	public ArrayList<Double> getCanard2Angle(){return canard2Angle; }
+
+	public ArrayList<Double> getRollRates(){return rollRates; }
+	public ArrayList<Coordinate> getRotationalAccelerations(){ return rotationalAccelerations; }
+
+	/**
+	 * Tester method, introduces roll accelerations and observe how sim changes in response
+	 */
+	public void introduceRoll(){
+		if (currentStatus.getSimulationTime() >4 ){
+			double rollAngle = Math.toRadians(1000);
+//			((RK4SimulationStepper) currentStepper).getFlightConditions().setRollRate((rollAngle);
+
+			Coordinate newVelocity = new Coordinate(currentStatus.getRocketRotationVelocity().x,currentStatus.getRocketRotationVelocity().y, rollAngle);
+			currentStatus.setRocketRotationVelocity(newVelocity);
+			allowRoll = false;
+		}
+	}
+
+	public void guidanceSimulationEditor() {
+		if (currentStepper instanceof RK4SimulationStepper){
+
+			FlightConditions flightconds = ((RK4SimulationStepper) currentStepper).getFlightConditions();
+			AccelerationData accData  =((RK4SimulationStepper) currentStepper).getAccelerationData();
+
+			rollRates.add( (flightconds != null) ?  flightconds.getRollRate() : -1);
+			rotationalAccelerations.add( (accData != null) ?  accData.getRotationalAccelerationRC() : new Coordinate(-100, -100, -100));
+
+			//IF simulation is above time required for roll control,
+			//DETERMINES ROLL MODEL!!
+			if(currentStatus.getSimulationTime() >= rollControlModel.getStartTime()){
+				if(allowRoll){ introduceRoll();}
+				//Gets roll values
+//				rollControlModel.PIDControl(currentStatus.getSimulationTime(), currentStatus.getPreviousTimeStep(),
+//						flightconds.getRollRate(), accData.getRotationalAccelerationRC().z);
+				rollControlModel.sampleRollControl(currentStatus, flightconds.getRollRate() );
+
+				setCanardCant(rollControlModel.getFinPosition(),rollControlModel.getFinPosition());
+//				setCanardCant(0,0);
+
+
+			} else if (canard1Angle.size() ==0 &&  canard1Angle.size() ==0){  //if no past values
+				canard1Angle.add(0.0);//ERRORMODE: assumes starting angle is always 0
+				canard2Angle.add(0.0);
+
+			} else{//otherwise, add past values to canard cant angle arrays (so they remain same length)
+				canard1Angle.add(canard1Angle.get(canard1Angle.size()-1));
+				canard2Angle.add(canard2Angle.get(canard2Angle.size()-1));
+			}
+
+
+		} else{ //sets dummy variables if not RK4 stepper (since these values aren't defined
+			rollRates.add(-1.0);
+			rotationalAccelerations.add(new Coordinate(-100, -100, -100));
+			canard1Angle.add(-.69);
+			canard2Angle.add(-.69);
+
+		}
+
+
+
+
 
 	}
 	//end Eric
@@ -186,12 +287,15 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 			currentStepper = groundStepper;
 		else
 			currentStepper = flightStepper;
+		currentStatus = currentStepper.initialize(currentStatus);
+
+
 		//TODO NEW ERIC CODE
-		fullFlightStatus.add(currentStatus);
-		setCanardCant(Math.toRadians(10), Math.toRadians(10) );
+		guidanceSimulationEditor();
+		fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
+		//End of eric code
 		//end Eric
 
-		currentStatus = currentStepper.initialize(currentStatus);
 		double previousSimulationTime = currentStatus.getSimulationTime();
 		
 		// Get originating position (in case listener has modified launch position)
@@ -207,10 +311,7 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 				// Take the step
 				double oldAlt = currentStatus.getRocketPosition().z;
 
-				//TODO: NEW eric code, used for changing wind based on altitude
-				setCanardCant(Math.toRadians(10), Math.toRadians(10) );
 
-				//End of eric code
 
 				if (SimulationListenerHelper.firePreStep(currentStatus)) {
 					// Step at most to the next event
@@ -222,39 +323,39 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 					} else if (currentStatus.isLanded()) {
 						maxStepTime = 0.0;
 					}
-					
+
 					log.trace("Taking simulation step at t=" + currentStatus.getSimulationTime() + " altitude " + oldAlt);
 
 					currentStepper.step(currentStatus, maxStepTime);
 
 
-					//TODO NEW ERIC CODE
-					fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
- 					setCanardCant(Math.toRadians(10), Math.toRadians(10) );
-					//end Eric
 				}
 				SimulationListenerHelper.firePostStep(currentStatus);
-				
-				
+
+				//TODO: NEW eric code, used for changing canard angle
+				guidanceSimulationEditor();
+				fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
+				//End of eric code
+
 				// Check for NaN values in the simulation status
 				checkNaN();
-				
+
 				// If we haven't hit the ground, add altitude event
 				if (!currentStatus.isLanded())
 					currentStatus.addEvent(new FlightEvent(FlightEvent.Type.ALTITUDE, currentStatus.getSimulationTime(),
 											 currentStatus.getConfiguration().getRocket(),
 											 new Pair<Double, Double>(oldAlt, currentStatus.getRocketPosition().z)));
-				
+
 				if (currentStatus.getRocketPosition().z > currentStatus.getMaxAlt()) {
 					currentStatus.setMaxAlt(currentStatus.getRocketPosition().z);
 				}
-				
+
 				// Position relative to start location
 				Coordinate relativePosition = currentStatus.getRocketPosition().sub(origin);
-				
+
 				// Add appropriate events
 				if (!currentStatus.isLiftoff()) {
-					
+
 					// Avoid sinking into ground before liftoff
 					if (relativePosition.z < 0) {
 						currentStatus.setRocketPosition(origin);
@@ -265,33 +366,33 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 					if (relativePosition.z > 0.02) {
 						currentStatus.addEvent(new FlightEvent(FlightEvent.Type.LIFTOFF, currentStatus.getSimulationTime()));
 					}
-					
+
 				} else {
-					
+
 					// Check ground hit after liftoff
 					if ((currentStatus.getRocketPosition().z < MathUtil.EPSILON) && !currentStatus.isLanded()) {
 						currentStatus.addEvent(new FlightEvent(FlightEvent.Type.GROUND_HIT, currentStatus.getSimulationTime()));
-						
+
 						// currentStatus.addEvent(new FlightEvent(FlightEvent.Type.SIMULATION_END, currentStatus.getSimulationTime()));
 					}
-					
+
 				}
-				
+
 				// Check for launch guide clearance
 				if (currentStatus.isLiftoff() &&
 					!currentStatus.isLaunchRodCleared() &&
 						relativePosition.length() > currentStatus.getSimulationConditions().getLaunchRodLength()) {
 					currentStatus.addEvent(new FlightEvent(FlightEvent.Type.LAUNCHROD, currentStatus.getSimulationTime(), null));
 				}
-				
-				
+
+
 				// Check for apogee
 				if (!currentStatus.isApogeeReached() && currentStatus.getRocketPosition().z < currentStatus.getMaxAlt() - 0.01) {
 					currentStatus.setMaxAltTime(previousSimulationTime);
 					currentStatus.addEvent(new FlightEvent(FlightEvent.Type.APOGEE, previousSimulationTime,
 							currentStatus.getConfiguration().getRocket()));
 				}
-				
+
 //				//@Obsolete
 //				//@Redundant
 //				// Check for burnt out motors
@@ -301,7 +402,7 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 //								(RocketComponent) state.getMount(), state));
 //					}
 //				}
-				
+
 				// Check for Tumbling
 				// Conditions for transition are:
 				//  apogee reached (if sustainer stage)
@@ -309,18 +410,18 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 				// and not stable (cg > cp)
 				// and aoa > AOA_TUMBLE_CONDITION threshold
 				// and thrust < THRUST_TUMBLE_CONDITION threshold
-				
+
 				if (!currentStatus.isTumbling()) {
 					final double cp = currentStatus.getFlightData().getLast(FlightDataType.TYPE_CP_LOCATION);
 					final double cg = currentStatus.getFlightData().getLast(FlightDataType.TYPE_CG_LOCATION);
 					final double aoa = currentStatus.getFlightData().getLast(FlightDataType.TYPE_AOA);
-					
+
 					final boolean wantToTumble = (cg > cp && aoa > AOA_TUMBLE_CONDITION);
 					final boolean isSustainer = currentStatus.getConfiguration().isStageActive(0);
 					final boolean isApogee = currentStatus.isApogeeReached();
 					if (wantToTumble && (isApogee || !isSustainer)) {
 						currentStatus.addEvent(new FlightEvent(FlightEvent.Type.TUMBLE, currentStatus.getSimulationTime()));
-					}					
+					}
 				}
 
 				// If I'm on the ground and have no events in the queue, I'm done

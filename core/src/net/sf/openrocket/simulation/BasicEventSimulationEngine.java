@@ -1,11 +1,12 @@
 package net.sf.openrocket.simulation;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.Random;
+import java.util.*;
 
+import net.sf.openrocket.aerodynamics.AerodynamicForces;
+import net.sf.openrocket.aerodynamics.barrowman.RocketComponentCalc;
+import net.sf.openrocket.document.RollControlModel;
 import net.sf.openrocket.models.wind.PinkNoiseWindModel;
+import net.sf.openrocket.rocketcomponent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,14 +18,6 @@ import net.sf.openrocket.l10n.Translator;
 import net.sf.openrocket.motor.MotorConfiguration;
 import net.sf.openrocket.motor.MotorConfigurationId;
 import net.sf.openrocket.motor.ThrustCurveMotor;
-import net.sf.openrocket.rocketcomponent.AxialStage;
-import net.sf.openrocket.rocketcomponent.DeploymentConfiguration;
-import net.sf.openrocket.rocketcomponent.FlightConfiguration;
-import net.sf.openrocket.rocketcomponent.FlightConfigurationId;
-import net.sf.openrocket.rocketcomponent.MotorMount;
-import net.sf.openrocket.rocketcomponent.RecoveryDevice;
-import net.sf.openrocket.rocketcomponent.RocketComponent;
-import net.sf.openrocket.rocketcomponent.StageSeparationConfiguration;
 import net.sf.openrocket.simulation.exception.SimulationCalculationException;
 import net.sf.openrocket.simulation.exception.SimulationException;
 import net.sf.openrocket.simulation.listeners.SimulationListenerHelper;
@@ -71,7 +64,13 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 
 	private boolean variableWindBoolean = false; //used for Variable wind
 	private SimulationConditions simCond; //used for Variable wind
+
+	//Guidance
 	private ArrayList<SimulationStatus> fullFlightStatus = new ArrayList<>(); //used to store all flight conditions every time step
+
+	private RollControlModel rollControlModel; // implements a roll control model
+	private ArrayList<Double> canard1Angle = new ArrayList<>(); //used to track canard 1 angle over flight
+	private ArrayList<Double> canard2Angle = new ArrayList<>(); //used to track canard 2 angle over flight
 
 
 	//IMPORTANT
@@ -193,6 +192,52 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 		return currentStatus;
 	}
 	public ArrayList<SimulationStatus> getAllStatus(){return fullFlightStatus;}
+
+	//GUIDANCE WORK
+	/**
+	 * Sets cant angle of the canards
+	 * NOTE: IN finset, maximium can't angle is 15 degrees, anything larger will become 15 degrees
+	 * @param cant1
+	 * @param cant2
+	 */
+	public void setCanardCant(double cant1, double cant2){
+		// The file path depends on the structure of the rocket, will need to change depending on rocket
+//		TrapezoidFinSet CanardOne = (TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(1);
+//		TrapezoidFinSet CanardTwo = (TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(2);
+//		CanardOne.setCantAngle(cant1);
+//		CanardTwo.setCantAngle(cant2);
+
+		//Attempt 2, changing active instances
+		InstanceMap imap = currentStatus.getConfiguration().getActiveInstances();
+		for(Map.Entry<RocketComponent, ArrayList<InstanceContext>> mapEntry: imap.entrySet() ) {
+			final RocketComponent comp = mapEntry.getKey();
+			final List<InstanceContext> contextList = mapEntry.getValue();
+			if (comp.getName() == "Canard1"){
+				((TrapezoidFinSet) comp).setCantAngle(cant1);
+			}
+			if (comp.getName() == "Canard2"){
+				((TrapezoidFinSet) comp).setCantAngle(cant2);
+			}
+
+		}
+
+
+
+	}
+	//Sets roll control, called by guidance engine
+	public void setRollControlModel(RollControlModel rollControlModel){
+		this.rollControlModel = rollControlModel;
+	}
+	public ArrayList<Double> getCanard1Angle(){return canard1Angle;}
+	public ArrayList<Double> getCanard2Angle(){return canard2Angle; }
+
+//	public void guidanceSimulationEditor(){
+//		rollControlModel.PIDControl(currentStatus.getSimulationTime(), currentStatus.getRocketRotationVelocity().z, currentStatus.getRocketAcceleration().z);
+//		setCanardCant(Math.toRadians(10), Math.toRadians(10) );
+//
+//		canard1Angle.add( ((TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(1)).getCantAngle());
+//		canard2Angle.add( ((TrapezoidFinSet) currentStatus.getSimulationConditions().getSimulation().getRocket().getChild(0).getChild(1).getChild(2)).getCantAngle());
+//	}
 	//end Eric
 
 	private FlightDataBranch simulateLoop() throws SimulationException {
@@ -202,13 +247,16 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 			currentStepper = groundStepper;
 		else
 			currentStepper = flightStepper;
-		//TODO NEW ERIC CODE
-			fullFlightStatus.add(currentStatus);
-		//end Eric
 
 		currentStatus = currentStepper.initialize(currentStatus);
 		double previousSimulationTime = currentStatus.getSimulationTime();
-		
+
+		//TODO NEW ERIC CODE
+//		guidanceSimulationEditor(); //runs at the very beginning, before while loop
+//		fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated		//end Eric
+		//end
+
+
 		// Get originating position (in case listener has modified launch position)
 		Coordinate origin = currentStatus.getRocketPosition();
 		Coordinate originVelocity = currentStatus.getRocketVelocity();
@@ -223,9 +271,11 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 				double oldAlt = currentStatus.getRocketPosition().z;
 
 				//TODO: NEW eric code, used for changing wind based on altitude
-				if (variableWindBoolean){
-					updateWind();
-				}
+//				if (variableWindBoolean){
+//					updateWind();
+//				}
+//				guidanceSimulationEditor(); //runs at the very beginning, before while loop
+//				fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
 				//End of eric code
 
 				if (SimulationListenerHelper.firePreStep(currentStatus)) {
@@ -242,15 +292,12 @@ public class BasicEventSimulationEngine implements SimulationEngine {
 					log.trace("Taking simulation step at t=" + currentStatus.getSimulationTime() + " altitude " + oldAlt);
 
 					currentStepper.step(currentStatus, maxStepTime);
-
-					//TODO NEW ERIC CODE
-					fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
-//					System.out.println(currentStatus.getRocketPosition() + " " + currentStatus.getSimulationTime() + " " + ((PinkNoiseWindModel) currentStatus.getSimulationConditions().getWindModel()).getAverage());
-//					System.out.println();
-					//end Eric
 				}
+
+
 				SimulationListenerHelper.firePostStep(currentStatus);
-				
+				//				guidanceSimulationEditor(); //runs at the very beginning, before while loop
+//				fullFlightStatus.add(currentStatus.clone()); //update
 				
 				// Check for NaN values in the simulation status
 				checkNaN();

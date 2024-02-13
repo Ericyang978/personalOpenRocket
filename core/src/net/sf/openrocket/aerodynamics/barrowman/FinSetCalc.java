@@ -197,7 +197,8 @@ public class FinSetCalc extends RocketComponentCalc {
 		}
 		forces.setCrollDamp(calculateDampingMoment(conditions));
 		forces.setCroll(forces.getCrollForce() - forces.getCrollDamp());
-		
+		System.out.println(" c-roll force is " +forces.getCrollForce() + " angle is " + cantAngle + " num fins " + finCount);
+
 		//		System.out.printf(component.getName() + ":  roll rate:%.3f  force:%.3f  damp:%.3f  " +
 		//				"total:%.3f\n",
 		//				conditions.getRollRate(), forces.CrollForce, forces.CrollDamp, forces.Croll);
