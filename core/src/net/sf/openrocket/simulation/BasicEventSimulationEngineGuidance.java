@@ -1,6 +1,7 @@
 package net.sf.openrocket.simulation;
 
 import net.sf.openrocket.aerodynamics.FlightConditions;
+import net.sf.openrocket.document.DataInfo;
 import net.sf.openrocket.document.RollControlModel;
 import net.sf.openrocket.l10n.Translator;
 import net.sf.openrocket.logging.SimulationAbort;
@@ -64,13 +65,11 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 
 	//Guidance Variables
 	private SimulationConditions simCond; //used for Variable wind
-	private ArrayList<SimulationStatus> fullFlightStatus = new ArrayList<>(); //used to store all flight conditions every time step
+
+	private DataInfo datainfo = new DataInfo();
 
 	private RollControlModel rollControlModel; // implements a roll control model
-	private ArrayList<Double> canard1Angle = new ArrayList<>(); //used to track canard 1 angle over flight
-	private ArrayList<Double> canard2Angle = new ArrayList<>(); //used to track canard 2 angle over flight
-	private ArrayList<Double> rollRates = new ArrayList<>();
-	private ArrayList<Coordinate> rotationalAccelerations = new ArrayList<>();
+
 
 	private boolean allowRoll = false; //introduces sudden change in roll that can be tested
 
@@ -191,12 +190,12 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 
 			if (comp.getName().equals("Canard1")){
 				((TrapezoidFinSet) comp).setCantAngle(cant1);
-				canard1Angle.add(cant1);
+				datainfo.addCanard1Angle(cant1);
 
 			}
 			if (comp.getName().equals("Canard2")){
 				((TrapezoidFinSet) comp).setCantAngle(cant2);
-				canard2Angle.add(cant2);
+				datainfo.addCanard2Angle(cant2);
 			}
 
 
@@ -208,21 +207,17 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 	public void setRollControlModel(RollControlModel rollControlModel){
 		this.rollControlModel = rollControlModel;
 	}
-	public SimulationStatus getCurrentStatus(){
-		return currentStatus;
+
+	//Returns all stored data, including rocket, flight, and condition info
+	public DataInfo getDataInfo() {
+		return datainfo;
 	}
-	public ArrayList<SimulationStatus> getAllStatus(){return fullFlightStatus;}
 
-	public ArrayList<Double> getCanard1Angle(){return canard1Angle;}
-	public ArrayList<Double> getCanard2Angle(){return canard2Angle; }
-
-	public ArrayList<Double> getRollRates(){return rollRates; }
-	public ArrayList<Coordinate> getRotationalAccelerations(){ return rotationalAccelerations; }
 
 	/**
 	 * Tester method, introduces roll accelerations and observe how sim changes in response
 	 */
-	public void introduceRoll(){
+	public void introduceRollRate(){
 		if (currentStatus.getSimulationTime() >4 ){
 			double rollAngle = Math.toRadians(1000);
 //			((RK4SimulationStepper) currentStepper).getFlightConditions().setRollRate((rollAngle);
@@ -233,44 +228,64 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 		}
 	}
 
-	public void guidanceSimulationEditor() {
+	/**
+	 * Sets values for roll rate and acceleration Pre Step
+	 */
+	public void PreStepGuidanceSimulationEditor() {
+		if (currentStepper instanceof RK4SimulationStepper) {
+//
+			FlightConditions flightconds = ((RK4SimulationStepper) currentStepper).getFlightConditions();
+
+			datainfo.addFlightStatus(currentStatus.clone()); //updates full flight status after currentstepper was updated
+			datainfo.addFlightConds(flightconds);
+
+//			AccelerationData accData = ((RK4SimulationStepper) currentStepper).getAccelerationData();
+//			datainfo.addRotationalAccelerations((accData != null) ? accData.getRotationalAccelerationRC() : new Coordinate(-100, -100, -100));
+
+
+		}
+
+	}
+
+	/**
+	 * Sets values for canard angle POST step
+	 */
+	public void PostStepGuidanceSimulationEditor() {
 		if (currentStepper instanceof RK4SimulationStepper){
 
 			FlightConditions flightconds = ((RK4SimulationStepper) currentStepper).getFlightConditions();
-			AccelerationData accData  =((RK4SimulationStepper) currentStepper).getAccelerationData();
+			AccelerationData accData = ((RK4SimulationStepper) currentStepper).getAccelerationData();
+			datainfo.addRotationalAccelerations((accData != null) ? accData.getRotationalAccelerationRC() : new Coordinate(-100, -100, -100));
 
-			rollRates.add( (flightconds != null) ?  flightconds.getRollRate() : -1);
-			rotationalAccelerations.add( (accData != null) ?  accData.getRotationalAccelerationRC() : new Coordinate(-100, -100, -100));
+
 
 			//IF simulation is above time required for roll control,
 			//DETERMINES ROLL MODEL!!
-			if(currentStatus.getSimulationTime() >= rollControlModel.getStartTime()){
-				if(allowRoll){ introduceRoll();}
-				//Gets roll values
-//				rollControlModel.PIDControl(currentStatus.getSimulationTime(), currentStatus.getPreviousTimeStep(),
-//						flightconds.getRollRate(), accData.getRotationalAccelerationRC().z);
-				rollControlModel.sampleRollControl(currentStatus, flightconds.getRollRate() );
+			if(flightconds!=null){
+				if(allowRoll){ introduceRollRate();}
+				datainfo.addRoll(rollControlModel.getRoll()); //adds roll information
 
+				//Gets roll values
+//				rollControlModel.roll(currentStatus, flightconds.getRollRate());
+				rollControlModel.PIDControl(currentStatus, flightconds.getRollRate() );
 				setCanardCant(rollControlModel.getFinPosition(),rollControlModel.getFinPosition());
+
 //				setCanardCant(0,0);
 
 
-			} else if (canard1Angle.size() ==0 &&  canard1Angle.size() ==0){  //if no past values
-				canard1Angle.add(0.0);//ERRORMODE: assumes starting angle is always 0
-				canard2Angle.add(0.0);
-
-			} else{//otherwise, add past values to canard cant angle arrays (so they remain same length)
-				canard1Angle.add(canard1Angle.get(canard1Angle.size()-1));
-				canard2Angle.add(canard2Angle.get(canard2Angle.size()-1));
+			} else{  //if no past values
+				datainfo.addCanard1Angle(0.0);//ERRORMODE: assumes starting angle is always 0
+				datainfo.addCanard2Angle(0.0);
+				datainfo.addRoll(0.0);
 			}
+//			else{//otherwise, add past values to canard cant angle arrays (so they remain same length)
+//				canard1Angle.add(canard1Angle.get(canard1Angle.size()-1));
+//				canard2Angle.add(canard2Angle.get(canard2Angle.size()-1));
+//			}
 
 
 		} else{ //sets dummy variables if not RK4 stepper (since these values aren't defined
-			rollRates.add(-1.0);
-			rotationalAccelerations.add(new Coordinate(-100, -100, -100));
-			canard1Angle.add(-.69);
-			canard2Angle.add(-.69);
-
+			datainfo.addDefault();
 		}
 
 
@@ -291,8 +306,9 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 
 
 		//TODO NEW ERIC CODE
-		guidanceSimulationEditor();
-		fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
+		PreStepGuidanceSimulationEditor();
+		PostStepGuidanceSimulationEditor();
+		setCanardCant(0,0);
 		//End of eric code
 		//end Eric
 
@@ -312,7 +328,9 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 				double oldAlt = currentStatus.getRocketPosition().z;
 
 
-
+				//New Eric Code
+				PreStepGuidanceSimulationEditor();
+				//End Eric Code
 				if (SimulationListenerHelper.firePreStep(currentStatus)) {
 					// Step at most to the next event
 					double maxStepTime = Double.MAX_VALUE;
@@ -333,8 +351,8 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 				SimulationListenerHelper.firePostStep(currentStatus);
 
 				//TODO: NEW eric code, used for changing canard angle
-				guidanceSimulationEditor();
-				fullFlightStatus.add(currentStatus.clone()); //updates full flight status after currentstepper was updated
+				PostStepGuidanceSimulationEditor();
+//				datainfo.addFlightStatus(currentStatus.clone()); //updates full flight status after currentstepper was updated
 				//End of eric code
 
 				// Check for NaN values in the simulation status
