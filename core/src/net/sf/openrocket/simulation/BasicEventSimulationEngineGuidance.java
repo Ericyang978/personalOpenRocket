@@ -213,12 +213,18 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 		return datainfo;
 	}
 
+	//Clears engine for next run, including reseting values such as datainfo
+	public void resetEngine(){
+		datainfo = new DataInfo();
+
+	}
+
 
 	/**
 	 * Tester method, introduces roll accelerations and observe how sim changes in response
 	 */
 	public void introduceRollRate(){
-		if (currentStatus.getSimulationTime() >4 ){
+		if (currentStatus.getSimulationTime() > 4 ){
 			double rollAngle = Math.toRadians(1000);
 //			((RK4SimulationStepper) currentStepper).getFlightConditions().setRollRate((rollAngle);
 
@@ -233,16 +239,7 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 	 */
 	public void PreStepGuidanceSimulationEditor() {
 		if (currentStepper instanceof RK4SimulationStepper) {
-//
-			FlightConditions flightconds = ((RK4SimulationStepper) currentStepper).getFlightConditions();
-
 			datainfo.addFlightStatus(currentStatus.clone()); //updates full flight status after currentstepper was updated
-			datainfo.addFlightConds(flightconds);
-
-//			AccelerationData accData = ((RK4SimulationStepper) currentStepper).getAccelerationData();
-//			datainfo.addRotationalAccelerations((accData != null) ? accData.getRotationalAccelerationRC() : new Coordinate(-100, -100, -100));
-
-
 		}
 
 	}
@@ -253,8 +250,11 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 	public void PostStepGuidanceSimulationEditor() {
 		if (currentStepper instanceof RK4SimulationStepper){
 
+
 			FlightConditions flightconds = ((RK4SimulationStepper) currentStepper).getFlightConditions();
 			AccelerationData accData = ((RK4SimulationStepper) currentStepper).getAccelerationData();
+
+			datainfo.addFlightConds(flightconds);
 			datainfo.addRotationalAccelerations((accData != null) ? accData.getRotationalAccelerationRC() : new Coordinate(-100, -100, -100));
 
 
@@ -263,12 +263,12 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 			//DETERMINES ROLL MODEL!!
 			if(flightconds!=null){
 				if(allowRoll){ introduceRollRate();}
-				datainfo.addRoll(rollControlModel.getRoll()); //adds roll information
 
 				//Gets roll values
 //				rollControlModel.roll(currentStatus, flightconds.getRollRate());
 				rollControlModel.PIDControl(currentStatus, flightconds.getRollRate() );
 				setCanardCant(rollControlModel.getFinPosition(),rollControlModel.getFinPosition());
+				datainfo.addRoll(rollControlModel.getRoll()); //adds roll information
 
 //				setCanardCant(0,0);
 
@@ -284,9 +284,10 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 //			}
 
 
-		} else{ //sets dummy variables if not RK4 stepper (since these values aren't defined
-			datainfo.addDefault();
 		}
+//		else{ //sets dummy variables if not RK4 stepper (since these values aren't defined
+//			datainfo.addDefault();
+//		}
 
 
 
@@ -306,8 +307,8 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 
 
 		//TODO NEW ERIC CODE
-		PreStepGuidanceSimulationEditor();
-		PostStepGuidanceSimulationEditor();
+//		PreStepGuidanceSimulationEditor();
+////		PostStepGuidanceSimulationEditor();
 		setCanardCant(0,0);
 		//End of eric code
 		//end Eric
@@ -352,7 +353,6 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 
 				//TODO: NEW eric code, used for changing canard angle
 				PostStepGuidanceSimulationEditor();
-//				datainfo.addFlightStatus(currentStatus.clone()); //updates full flight status after currentstepper was updated
 				//End of eric code
 
 				// Check for NaN values in the simulation status
@@ -810,6 +810,7 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 			
 		}
 
+		//ERIC: changed time limit to 5 seconds for right now
 		// TODO FUTURE : do not hard code the 1200 (maybe even make it configurable by the user)
 		if( 1200 < currentStatus.getSimulationTime() ){
 			ret = false;

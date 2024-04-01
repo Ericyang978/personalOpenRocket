@@ -7,11 +7,15 @@ import net.sf.openrocket.aerodynamics.FlightConditions;
 import net.sf.openrocket.simulation.*;
 import net.sf.openrocket.simulation.exception.SimulationException;
 import net.sf.openrocket.simulation.SimulationEngine;
+import net.sf.openrocket.simulation.extension.example.RollControl;
 import net.sf.openrocket.util.Coordinate;
 
 import javax.swing.*;
+import javax.xml.crypto.Data;
 
 public class GuidanceEngine {
+
+    private SimulationConditions presetConditions;
 
     private SimulationConditions conditions;
     private final Class<? extends SimulationEngine> simulationEngineClass = BasicEventSimulationEngineGuidance.class;
@@ -25,6 +29,11 @@ public class GuidanceEngine {
     private Double[][] data;
 
     private DataInfo datainfo = new DataInfo();
+    private Optimizer optimizer = new Optimizer();
+
+
+    //Optimization
+    private DataAnalyzer analyzer;
 
 
 
@@ -42,6 +51,7 @@ public class GuidanceEngine {
         } catch (InvocationTargetException | NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
+        this.presetConditions = presetConditions.clone();
         conditions = presetConditions.clone();
 
         //Variable definition
@@ -50,20 +60,47 @@ public class GuidanceEngine {
         //Canard angle trackers
 
     }
+    public void loopSim() throws SimulationException {
+
+        for(int i = 0; i < 100; i ++){
+            defineControl();
+            runSim();
+            analyzeData();
+
+            System.out.println(i + " KP: " + rollModel.getKP() + " KD: "+ rollModel.getKD() + " KI " + rollModel.getKI());
+
+            optimizer.optimize(analyzer, rollModel);
+//
+            if (i ==0 || i == 50 || i == 99){
+                saveData();
+                exportData();
+            }
+            clearDataVariables();
+
+
+
+        }
+
+    }
 
     public void runSim() throws SimulationException {
+
+
         flightSummary = simulator.simulate(conditions); //outputs flight vars, and runs sim
         //Retrieving data from simulator
         retrieveData();
+//        saveData();
+//        exportData();
+
+    }
 
 
-        saveData();
-        exportData();
-
-        //Tests
-        System.out.println("");
-        System.out.println("BREAK!");
-        System.out.println("");
+    /**
+     * Determines the control conditions used for the specific iteration
+     */
+    public void defineControl(){
+        rollModel.setSetPointRoll(Math.toRadians(180));
+        rollModel.setStartTime(2);
     }
 
     /**
@@ -73,13 +110,15 @@ public class GuidanceEngine {
     public void retrieveData(){
         //used just to more easily get values from the simulator object
         this.datainfo = ((BasicEventSimulationEngineGuidance) simulator).getDataInfo();
-//        BasicEventSimulationEngineGuidance tempSim = ((BasicEventSimulationEngineGuidance) simulator);
 
-//        allflightData = tempSim.getDataInfo().getFullFlightStatus();
-//        canard1Angle = tempSim.getDataInfo().getCanard1Angle();
-//        canard2Angle =  tempSim.getDataInfo().getCanard2Angle();
-//        allFlightConds = tempSim.getDataInfo().getAllFlightConds();
-//        rotationalAccelerations = tempSim.getDataInfo().getRotationalAccelerations();
+    }
+
+    /**
+     * Analyzes data from single run of controlled rocket
+     */
+    public void analyzeData(){
+        analyzer = new DataAnalyzer(datainfo);
+        analyzer.analyze(rollModel);
     }
     public void saveData(){
         int count = 0;
@@ -91,7 +130,7 @@ public class GuidanceEngine {
             data[count][4] = status.getRocketPosition().z;
             data[count][5] = Math.toDegrees(datainfo.getAllRolls().get(count));
             data[count][6] = (datainfo.getAllFlightConds().get(count) != null) ? Math.toDegrees(datainfo.getAllFlightConds().get(count).getRollRate()) : -1;
-//            data[count][7] = Math.toDegrees(datainfo.getRotationalAccelerations().get(count).x);
+            data[count][7] = datainfo.getAllFlightConds().get(count).getVelocity();
 //            data[count][8] = Math.toDegrees(datainfo.getRotationalAccelerations().get(count).y);
             data[count][9] = Math.toDegrees(datainfo.getRotationalAccelerations().get(count).z);
             data[count][10] = Math.toDegrees(datainfo.getCanard1Angle().get(count)); //ERRORMODE, canard1Angle not right size
@@ -101,7 +140,7 @@ public class GuidanceEngine {
     }
     public void exportData() {
         Object[] columnNames = {"step #", "simulation time",  "positionEast of Launch (m)", "position North of Launch (m)",
-                "altitude(m)", "rocket roll" , "rocket roll velocity", "Rotational acc x", "Rotational acc y",
+                "altitude(m)", "rocket roll" , "rocket roll velocity", "Rocket velocity", "Rotational acc y",
                 "Rotational acc z", "canard 1 angle", "canard 2 angle"};
 
         //suspicious, could cause problem cuz wrapping in double, not primitive type double
@@ -121,6 +160,17 @@ public class GuidanceEngine {
         frame.setSize(500, 200);
         // Frame Visible = true
         frame.setVisible(true);
+    }
+
+    //removes data variables from recent past run, since that data has already been used
+    public void clearDataVariables(){
+        datainfo = new DataInfo();
+        conditions = presetConditions.clone(); //makes sure conditions aren't edited at all
+        rollModel.resetRollControlModel(); //resets values in roll model (such as roll value)
+        ((BasicEventSimulationEngineGuidance) simulator).resetEngine(); //resets engine values
+        data = new Double[20000][12];
+
+
     }
 
 

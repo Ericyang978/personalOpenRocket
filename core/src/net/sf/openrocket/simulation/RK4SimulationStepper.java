@@ -149,6 +149,7 @@ public class RK4SimulationStepper extends AbstractSimulationStepper {
 				limitingValue = i;
 			}
 		}
+
 		
 		log.trace("Selected time step " + store.timestep + " (limiting factor " + limitingValue + ")");
 		
@@ -176,7 +177,9 @@ public class RK4SimulationStepper extends AbstractSimulationStepper {
 					minTimeStep + " instead.");
 			store.timestep = minTimeStep;
 		}
-		
+
+		//ERIC CODE TODO: enforce that 0.01 intervals need to be included for roll control reasons after start time
+
 		checkNaN(store.timestep);
 
 					  

@@ -438,7 +438,7 @@ public class Simulation implements ChangeSource, Cloneable {
 			}
 			else if (guidance) { //guidance for MEMS rocket proj
 				GuidanceEngine guideSim = new GuidanceEngine(simulationConditions);
-				guideSim.runSim();
+				guideSim.loopSim();
 			}
 			else{
 				simulatedData = simulator.simulate(simulationConditions);
