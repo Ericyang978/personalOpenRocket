@@ -266,6 +266,7 @@ public class BasicEventSimulationEngineGuidance implements SimulationEngine {
 
 				//Gets roll values
 //				rollControlModel.roll(currentStatus, flightconds.getRollRate());
+				rollControlModel.roll(currentStatus,flightconds.getRollRate() );
 				rollControlModel.PIDControl(currentStatus, flightconds.getRollRate() );
 				setCanardCant(rollControlModel.getFinPosition(),rollControlModel.getFinPosition());
 				datainfo.addRoll(rollControlModel.getRoll()); //adds roll information

@@ -60,9 +60,10 @@ public class GuidanceEngine {
         //Canard angle trackers
 
     }
+    //chenlei suggestion: conduct a Z transform given PID inputs, see if the area is
     public void loopSim() throws SimulationException {
 
-        for(int i = 0; i < 100; i ++){
+        for(int i = 0; i < 50; i ++){
             defineControl();
             runSim();
             analyzeData();
@@ -71,8 +72,8 @@ public class GuidanceEngine {
 
             optimizer.optimize(analyzer, rollModel);
 //
-            if (i ==0 || i == 50 || i == 99){
-                saveData();
+            if (i%10 == 0){
+                saveData(i);
                 exportData();
             }
             clearDataVariables();
@@ -100,7 +101,7 @@ public class GuidanceEngine {
      */
     public void defineControl(){
         rollModel.setSetPointRoll(Math.toRadians(180));
-        rollModel.setStartTime(2);
+        rollModel.setStartTime(1.5);
     }
 
     /**
@@ -120,10 +121,10 @@ public class GuidanceEngine {
         analyzer = new DataAnalyzer(datainfo);
         analyzer.analyze(rollModel);
     }
-    public void saveData(){
+    public void saveData(double iterationNum){
         int count = 0;
         for (SimulationStatus status: datainfo.getFullFlightStatus()){
-            data[count][0] = count/1.0;
+            data[count][0] = iterationNum;
             data[count][1] = status.getSimulationTime();
 //            data[count][2] = status.getRocketPosition().x;
 //            data[count][3] = status.getRocketPosition().y;

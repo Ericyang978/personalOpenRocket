@@ -61,7 +61,11 @@ public class RK4SimulationStepper extends AbstractSimulationStepper {
 	
 	private Random random;
 	DataStore store = new DataStore();
-	
+
+	// NEW ERIC CODE
+	double prevTime = 0;
+	double clockSpeed = 10.0/1000; //Clock rate of 10 milliseconds
+	//End Eric
 	@Override
 	public RK4SimulationStatus initialize(SimulationStatus original) {
 		
@@ -150,6 +154,13 @@ public class RK4SimulationStepper extends AbstractSimulationStepper {
 			}
 		}
 
+		//ERIC CODE TODO: enforce that 0.01 intervals need to be included for roll control reasons after start time
+		double currTime = prevTime + store.timestep;
+		if( Math.floor(prevTime/clockSpeed) < Math.floor(currTime/clockSpeed)){
+			store.timestep = Math.floor(currTime/clockSpeed)*clockSpeed - prevTime;
+		}
+
+		//END ERIC
 		
 		log.trace("Selected time step " + store.timestep + " (limiting factor " + limitingValue + ")");
 		
@@ -177,8 +188,8 @@ public class RK4SimulationStepper extends AbstractSimulationStepper {
 					minTimeStep + " instead.");
 			store.timestep = minTimeStep;
 		}
+		prevTime += store.timestep;
 
-		//ERIC CODE TODO: enforce that 0.01 intervals need to be included for roll control reasons after start time
 
 		checkNaN(store.timestep);
 

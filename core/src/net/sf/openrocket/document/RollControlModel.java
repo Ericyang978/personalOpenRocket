@@ -22,15 +22,26 @@ public class RollControlModel {
 //    private double KI = -0.0001;
 //    private double KD = -1;
 
-    private double KP = 1;
-    private double KI = -Math.pow(10, -4);
-    private double KD = -1;
+//    private double KP = .1;
+//    private double KI = 0;
+//    private double KD = 0;
+
+    private double KP = .233;
+    private double KI = -0.00679;
+    private double KD = -1.02573*Math.pow(10, -6);
     private double setPointRate = 0 ;//roll rate of 0
 
     private double setPointRoll;//Roll is defined as 90 degrees in flight
 
-    private double maxFinRate = Math.toRadians(10);  //maximium rate of change of fin
+    private double maxFinRate = Math.toRadians(69)/(18.0/60);  //maximium rate of change of fin, based on video angle and frames shot at 60 fps
     private double maxFinAngle = Math.toRadians(15); //maximium fin angle
+
+    private double clockSpeed = 10.0/1000; //clock speed
+
+    private double prevTime = 0;
+    private double deltaT = 0; //General deltaT, updated every time and used for roll
+
+    private double prevControlTime; //based on last time electronics were used, must at least be greater than clocktime from current time
 
     //Data variable
     private ArrayList<Double> rollArray = new ArrayList<>();
@@ -39,28 +50,37 @@ public class RollControlModel {
 
     //Calculates roll by integrating roll rate
     public void roll(SimulationStatus status, double rollRate){
-        double deltaT = status.getPreviousTimeStep();
+        deltaT = status.getSimulationTime() - prevTime;
         double avgRollRate = (prevRollRate + rollRate)/2;
         roll += deltaT*avgRollRate;
 
         prevRollRate = rollRate;
+        prevTime = status.getSimulationTime();
         //updated previous simulation time is done in another method since sim time is still needed there
 
     }
 
+
+
     public void PIDControl(SimulationStatus status, double rollRate){
 
-        roll(status,rollRate);
+//        roll(status,rollRate);
 
         //Before roll control starts, no need for controller to work
         if (status.getSimulationTime()< startTime){
             finPosition = 0;
             return;
         }
+        //only actives roll control every 10 miliseconds (roughly, to match clock speed)
+        if (Math.floor(( status.getSimulationTime()-deltaT)/clockSpeed) == Math.floor(status.getSimulationTime()/clockSpeed)){
+            return;
+        }
+
 
         // Determine time step
 
-        double deltaT =  status.getPreviousTimeStep();
+        double deltaT =  status.getSimulationTime() - prevControlTime;
+        prevControlTime = status.getSimulationTime();
 
         // PID controller
         double error = setPointRoll - roll;
@@ -91,6 +111,8 @@ public class RollControlModel {
         }
 
     }
+
+
 
 
 
@@ -135,7 +157,11 @@ public class RollControlModel {
 
     //Set methods
 
-    public void setStartTime(double startTime){this.startTime = startTime;}
+    public void setStartTime(double startTime){
+        this.startTime = startTime;
+        this.prevControlTime = startTime;
+
+    }
 
     public void setSetPointRoll(double setPointRoll){this.setPointRoll = setPointRoll; }
 

@@ -27,9 +27,9 @@ public class DataAnalyzer {
      *     includes the percentages for negative percentage values, 0 and then positive percentage values
      *     index 0-99 represents negative error [-100 to -1]
      *     index 100 represents error of 0
-     *     index 101-200 represents positive error [1-100]
+     *     index 101-x00 represents positive error [1-x00]
      */
-    private double[] speed_metric = new double[201];
+    private double[] speed_metric = new double[100+1+1000];
 
     private double maxOvershootPercent_metric; //maximinium overshoot
     private int numOsciliations_metric = 0; // number of times
@@ -109,35 +109,41 @@ public class DataAnalyzer {
                 numOsciliations_metric +=1;
                 positive = true;
                 finalOsciliationIndex = i;
-            } else if (error_arr_percentage.get(i) < 0 && positive){
+//            } else if (error_arr_percentage.get(i) < 0 && positive){
                 numOsciliations_metric +=1;
                 positive = false;
-                finalOsciliationIndex = i;
+//                finalOsciliationIndex = i;
             }
         }
 
         maxOvershootPercent_metric = max;
 
-        //Stady state- finds when roll rate stabilizes after osciliations
-        boolean steadyReached = false;
-        for (int i = finalOsciliationIndex; i < error_arr_percentage.size(); i ++){
-            if (Math.abs(rollRate.get(i)) < 0.25){
-                steadyReached = true;
-            }
-            if(steadyReached){
-                //finds accumulated sum of errors
-                steadyStatePercent_metric += error_arr_percentage.get(i);
-            }
-        }
-        //finds average percentage error
+        //Stady state- finds when roll rate stabilizes after osciliations :implementation 1
+//        boolean steadyReached = false;
+//        for (int i = 0; i < error_arr_percentage.size(); i ++){
+//            if (Math.abs(rollRate.get(i)) < Math.toRadians(0.25)){
+//                steadyReached = true;
+//            }
+//            if(steadyReached){
+//                //finds accumulated sum of errors
+//                steadyStatePercent_metric += error_arr_percentage.get(i);
+//            }
+//        }
 
         //Prevents case when oscilitation cross at the end of the simulation run
-        if(error_arr_percentage.size() != finalOsciliationIndex+1){
-            steadyStatePercent_metric = steadyStatePercent_metric/(error_arr_percentage.size()-finalOsciliationIndex-1);
+//        if(error_arr_percentage.size() != finalOsciliationIndex+1){
+//            steadyStatePercent_metric = steadyStatePercent_metric/(error_arr_percentage.size()-finalOsciliationIndex-1);
+//        }
+//        else{
+//            steadyStatePercent_metric = error_arr_percentage.get(error_arr_percentage.size()-1);
+//        }
+
+        //average error: takes average error for around the last 90% of data
+        for (int i = error_arr_percentage.size()/10; i < error_arr_percentage.size(); i ++){
+            steadyStatePercent_metric += error_arr_percentage.get(i);
         }
-        else{
-            steadyStatePercent_metric = error_arr_percentage.get(error_arr_percentage.size()-1);
-        }
+
+        steadyStatePercent_metric = steadyStatePercent_metric/(error_arr_percentage.size()*0.9);
     }
 
 

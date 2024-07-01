@@ -4,17 +4,17 @@ public class Optimizer {
 
     //DEFINES MAX TOLERABLE VALUES
     private final double maxOvershootPercentage = 5;
-    private final int maxNumOsciliations = 3;
+//    private final int maxNumOsciliations = ;
     private final double maxSteadyStateError = Math.toRadians(0.25);  //in radians
 
-    private final double maxSettlingTime_5 = 5;  //max settling time for percentage error 0
-    private final double maxSettlingTime_20 = 4.5;  //max settling time for percentage error 0
+    private final double maxSettlingTime_5 = 2;  //max settling time for percentage error 0
+    private final double maxSettlingTime_20 = 1.5;  //max settling time for percentage error 0
 
     //DETERMINE LEARN RATE
 
-    private final double alpha_KI = -0.00000001;
-    private final double alpha_KD = - 0.0001;
-    private final double alpha_KP = 0.0001;
+    private final double alpha_KI = -0.00000002;
+    private final double alpha_KD = - 0.0002;
+    private final double alpha_KP = 0.0002;
 
 
 
@@ -47,8 +47,8 @@ public class Optimizer {
     //Finds the change in KD based on overshoot and osciliation number
     public double dKD(DataAnalyzer dataAnalyzer){
         double scaledOvershoot = dataAnalyzer.getMaxOvershootPercent_metric()/ maxOvershootPercentage;
-        double scaledOsciliations = dataAnalyzer.getNumOsciliations_metric()/maxNumOsciliations;
-        return (scaledOvershoot+scaledOsciliations)*alpha_KD;
+//        double scaledOsciliations = dataAnalyzer.getNumOsciliations_metric()/maxNumOsciliations;
+        return (scaledOvershoot)*alpha_KD;
 
     }
 
